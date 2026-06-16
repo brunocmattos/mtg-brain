@@ -46,6 +46,7 @@ export interface DeckSummary {
 }
 
 export interface DeckCardRow {
+  id: string
   name: string
   qty: number
   is_commander: boolean

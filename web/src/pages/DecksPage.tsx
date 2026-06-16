@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import type { CardSummary, DeckCardRow } from '../api'
 import DeckAnalysis from '../components/DeckAnalysis'
+import CardDetailModal from '../components/CardDetailModal'
 
 export default function DecksPage() {
   const [selected, setSelected] = useState<number | null>(null)
@@ -70,18 +71,28 @@ function bucket(c: DeckCardRow): string {
   return 'outro'
 }
 
-function CardLine({ c, onRemove, onHover }: { c: DeckCardRow; onRemove: () => void; onHover: (img: string | null) => void }) {
+function CardLine({
+  c,
+  onRemove,
+  onHover,
+  onOpen,
+}: {
+  c: DeckCardRow
+  onRemove: () => void
+  onHover: (img: string | null) => void
+  onOpen: () => void
+}) {
   return (
     <div
       onMouseEnter={() => onHover(c.image)}
       onMouseLeave={() => onHover(null)}
       className="flex items-center justify-between rounded px-2 py-1 text-sm hover:bg-surface-2"
     >
-      <span className={`truncate ${c.is_commander ? 'text-accent' : ''}`}>
+      <button onClick={onOpen} className={`truncate text-left hover:text-primary ${c.is_commander ? 'text-accent' : ''}`}>
         {c.is_commander ? '★ ' : ''}
         {c.name}
         {c.qty > 1 ? ` ×${c.qty}` : ''}
-      </span>
+      </button>
       <span className="flex items-center gap-2 text-xs text-muted shrink-0 pl-2">
         <span>{c.usd != null ? `$${c.usd.toFixed(2)}` : '—'}</span>
         <button onClick={onRemove} className="hover:text-red-400" title="remover">✕</button>
@@ -97,6 +108,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
   const [q, setQ] = useState('')
   const [submitted, setSubmitted] = useState('')
   const [preview, setPreview] = useState<string | null>(null)
+  const [openCard, setOpenCard] = useState<string | null>(null)
   const search = useQuery({ queryKey: ['cardsearch', submitted], queryFn: () => api.searchCards(submitted), enabled: submitted.length > 0 })
   const suggestions = useQuery({ queryKey: ['suggest', deck?.commander], queryFn: () => api.suggest(deck!.commander!), enabled: !!deck?.commander })
 
@@ -118,19 +130,31 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
   }
 
   const showResults = submitted.length > 0 && (search.data?.length ?? 0) > 0
+  const commander = deck?.cards.find((c) => c.is_commander)
   const groups: Record<string, DeckCardRow[]> = {}
   for (const c of deck?.cards ?? []) (groups[bucket(c)] ??= []).push(c)
 
   return (
     <div>
       <button onClick={onBack} className="text-muted text-sm hover:text-text mb-3">← decks</button>
+
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="lg:flex-1 min-w-0">
-          <h1 className="text-xl font-semibold">{deck?.name}</h1>
-          <p className="text-muted text-sm mb-3">
-            {deck?.commander ?? 'sem comandante'} · {analysis?.total_cards ?? deck?.cards.length ?? 0} cartas
-            {deck ? ` (${deck.cards.length} únicas)` : ''}
-          </p>
+          {/* banner do comandante */}
+          <div className="flex gap-4 items-start mb-4">
+            {commander?.image && (
+              <button onClick={() => commander.id && setOpenCard(commander.id)} className="shrink-0" title="ver carta">
+                <img src={commander.image} alt={deck?.commander ?? ''} className="w-28 rounded-lg border border-border hover:border-primary transition" />
+              </button>
+            )}
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold">{deck?.name}</h1>
+              <p className="text-muted text-sm">{deck?.commander ?? 'sem comandante'}</p>
+              <p className="text-muted text-xs mt-1">
+                {analysis?.total_cards ?? total} cartas{deck ? ` (${deck.cards.length} únicas)` : ''}
+              </p>
+            </div>
+          </div>
 
           <form onSubmit={(e) => { e.preventDefault(); setSubmitted(q.trim()) }} className="flex gap-2 mb-2">
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="buscar carta pra adicionar"
@@ -158,7 +182,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
                   {TYPE_LABEL[t]} ({groups[t].reduce((s, c) => s + c.qty, 0)})
                 </h3>
                 {groups[t].map((c) => (
-                  <CardLine key={c.name} c={c} onRemove={() => remove.mutate(c.name)} onHover={setPreview} />
+                  <CardLine key={c.name} c={c} onRemove={() => remove.mutate(c.name)} onHover={setPreview} onOpen={() => c.id && setOpenCard(c.id)} />
                 ))}
               </div>
             ))}
@@ -185,8 +209,9 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
       </div>
 
       {preview && (
-        <img src={preview} alt="" className="fixed bottom-6 right-6 w-60 rounded-xl shadow-2xl border border-border z-50 pointer-events-none" />
+        <img src={preview} alt="" className="hidden md:block fixed bottom-6 right-6 w-72 rounded-xl shadow-2xl border border-border z-40 pointer-events-none" />
       )}
+      {openCard && <CardDetailModal id={openCard} onClose={() => setOpenCard(null)} />}
     </div>
   )
 }

@@ -199,12 +199,12 @@ def remove_card(deck_id, card_name):
 def _deck_cards(deck_id):
     # Uma impressão (a mais barata) por nome, via LATERAL — máx ~100 lookups.
     return _rows(f"""
-        SELECT dc.card_name AS name, dc.qty, dc.is_commander,
+        SELECT dc.card_name AS name, dc.qty, dc.is_commander, c.id::text AS id,
                c.type_line, c.cmc, c.mana_cost, c.color_identity, c.oracle_text,
                c.usd, c.image
         FROM deck_cards dc
         LEFT JOIN LATERAL (
-            SELECT type_line, cmc, mana_cost, color_identity, oracle_text,
+            SELECT id, type_line, cmc, mana_cost, color_identity, oracle_text,
                    (prices->>'usd')::numeric AS usd, {_img('normal')} AS image
             FROM cards WHERE name = dc.card_name
             ORDER BY (prices->>'usd')::numeric ASC NULLS LAST LIMIT 1
