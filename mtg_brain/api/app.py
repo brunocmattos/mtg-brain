@@ -104,6 +104,55 @@ def chat(req: ChatRequest):
     return {"answer": brain.ask(req.question, verbose=req.verbose)}
 
 
+class DeckCreate(BaseModel):
+    name: str
+    commander: str | None = None
+
+
+class DeckCardBody(BaseModel):
+    card_name: str
+    qty: int = 1
+    is_commander: bool = False
+
+
+@api.post("/decks")
+def create_deck(body: DeckCreate):
+    return queries.create_deck(body.name, body.commander)
+
+
+@api.get("/decks")
+def list_decks():
+    return queries.list_decks()
+
+
+@api.get("/decks/{deck_id}")
+def get_deck(deck_id: int):
+    d = queries.get_deck(deck_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="deck não encontrado")
+    return d
+
+
+@api.post("/decks/{deck_id}/cards")
+def add_card(deck_id: int, body: DeckCardBody):
+    return queries.add_card(deck_id, body.card_name, body.qty, body.is_commander)
+
+
+@api.delete("/decks/{deck_id}/cards")
+def remove_card(deck_id: int, name: str):
+    return queries.remove_card(deck_id, name)
+
+
+@api.get("/decks/{deck_id}/analysis")
+def deck_analysis(deck_id: int):
+    return queries.deck_analysis(deck_id)
+
+
+@api.get("/commanders/suggest")
+def suggest(commander: str, limit: int = 40):
+    return queries.suggest_cards(commander, limit)
+
+
 app.include_router(api)
 
 # Serve o frontend (build do React) com fallback de SPA: rotas client-side
