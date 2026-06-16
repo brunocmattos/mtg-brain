@@ -6,44 +6,40 @@ import CardDetailModal from '../components/CardDetailModal'
 
 const COLORS = ['W', 'U', 'B', 'R', 'G']
 
-export default function CommandersPage() {
-  const [theme, setTheme] = useState('')
+export default function CardsPage() {
+  const [q, setQ] = useState('')
   const [submitted, setSubmitted] = useState('')
   const [colors, setColors] = useState<string[]>([])
-  const [maxPrice, setMaxPrice] = useState('')
-  const [sort, setSort] = useState('edhrec')
   const [selected, setSelected] = useState<string | null>(null)
 
-  const price = maxPrice ? Number(maxPrice) : undefined
-
   const { data, isLoading, error } = useQuery({
-    queryKey: ['commanders', submitted, colors, price, sort],
-    queryFn: () =>
-      submitted
-        ? api.recommendCommanders(submitted, colors, price)
-        : api.listCommanders(colors, price, sort),
+    queryKey: ['cards', submitted, colors],
+    queryFn: () => api.searchCards(submitted, colors),
+    enabled: submitted.length > 0 || colors.length > 0,
   })
 
   function submit(e: FormEvent) {
     e.preventDefault()
-    setSubmitted(theme.trim())
+    setSubmitted(q.trim())
   }
   const toggle = (c: string) =>
     setColors((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]))
 
+  const idle = !submitted && colors.length === 0
+
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-1">Comandantes</h1>
+      <h1 className="text-xl font-semibold mb-1">Cartas</h1>
       <p className="text-muted text-sm mb-4">
-        Por padrão, os mais jogados (rank EDHREC). Busque um tema (ex.: <em>vampire</em>,{' '}
-        <em>zombie</em>, <em>sacrifice</em>) ou filtre por cor e preço.
+        Busque qualquer carta por nome ou texto (ex.: <em>Sol Ring</em>,{' '}
+        <em>destroy target creature</em>, <em>loses life</em>) e filtre por cor.
       </p>
 
       <form onSubmit={submit} className="flex flex-wrap items-center gap-2 mb-5">
         <input
-          value={theme}
-          onChange={(e) => setTheme(e.target.value)}
-          placeholder="tema (opcional)"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="nome ou texto da carta"
           className="bg-surface border border-border rounded-md px-3 py-2 text-sm flex-1 min-w-44 outline-none focus:border-primary"
         />
         <div className="flex gap-1">
@@ -60,40 +56,12 @@ export default function CommandersPage() {
             </button>
           ))}
         </div>
-        <input
-          value={maxPrice}
-          onChange={(e) => setMaxPrice(e.target.value.replace(/[^0-9.]/g, ''))}
-          placeholder="máx US$"
-          inputMode="decimal"
-          className="bg-surface border border-border rounded-md px-3 py-2 text-sm w-24 outline-none focus:border-primary"
-        />
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          disabled={!!submitted}
-          title={submitted ? 'Ordenação fixa no modo tema' : 'Ordenar'}
-          className="bg-surface border border-border rounded-md px-2 py-2 text-sm outline-none disabled:opacity-50"
-        >
-          <option value="edhrec">Rank EDH</option>
-          <option value="name">Nome</option>
-        </select>
         <button className="bg-primary text-white rounded-md px-4 py-2 text-sm font-medium">Buscar</button>
-        {submitted && (
-          <button
-            type="button"
-            onClick={() => {
-              setTheme('')
-              setSubmitted('')
-            }}
-            className="text-muted text-sm hover:text-text"
-          >
-            limpar tema
-          </button>
-        )}
       </form>
 
+      {idle && <p className="text-muted text-sm">Digite algo (ou escolha cores) e busque.</p>}
       {isLoading && <p className="text-muted">Carregando…</p>}
-      {error && <p className="text-red-400">Erro ao buscar. O backend está rodando em :8000?</p>}
+      {error && <p className="text-red-400">Erro ao buscar.</p>}
       {data && data.length === 0 && <p className="text-muted">Nada encontrado.</p>}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">

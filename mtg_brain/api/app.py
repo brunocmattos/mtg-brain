@@ -7,6 +7,7 @@ import os
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -105,8 +106,18 @@ def chat(req: ChatRequest):
 
 app.include_router(api)
 
-# Serve o frontend (build do React) se já existir — Fase 2.
+# Serve o frontend (build do React) com fallback de SPA: rotas client-side
+# (/commanders, /cards, /chat) devolvem index.html; assets reais são servidos direto.
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DIST = os.path.join(_REPO, "web", "dist")
 if os.path.isdir(_DIST):
-    app.mount("/", StaticFiles(directory=_DIST, html=True), name="web")
+    app.mount("/assets", StaticFiles(directory=os.path.join(_DIST, "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    def spa(full_path: str):
+        if full_path.startswith("api"):
+            raise HTTPException(status_code=404, detail="rota de API não encontrada")
+        candidate = os.path.abspath(os.path.join(_DIST, full_path))
+        if full_path and candidate.startswith(os.path.abspath(_DIST)) and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(os.path.join(_DIST, "index.html"))

@@ -1,6 +1,7 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import ChatPage from './pages/ChatPage'
 import CommandersPage from './pages/CommandersPage'
+import CardsPage from './pages/CardsPage'
 
 export default function App() {
   return (
@@ -10,6 +11,7 @@ export default function App() {
           <span className="font-bold text-accent text-lg tracking-wide">mtg-brain</span>
           <nav className="flex gap-1">
             <Tab to="/commanders" label="Comandantes" />
+            <Tab to="/cards" label="Cartas" />
             <Tab to="/chat" label="Conversar" />
           </nav>
         </div>
@@ -18,6 +20,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/commanders" replace />} />
           <Route path="/commanders" element={<CommandersPage />} />
+          <Route path="/cards" element={<CardsPage />} />
           <Route path="/chat" element={<ChatPage />} />
         </Routes>
       </main>

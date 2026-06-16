@@ -55,6 +55,23 @@ export const api = {
     return get<CardSummary[]>(`/commanders/recommend?${p.toString()}`)
   },
 
+  listCommanders: (colors: string[] = [], maxPrice?: number, sort = 'edhrec') => {
+    const p = new URLSearchParams()
+    colors.forEach((c) => p.append('colors', c))
+    if (maxPrice != null) p.set('max_price', String(maxPrice))
+    p.set('sort', sort)
+    p.set('limit', '48')
+    return get<CardSummary[]>(`/commanders?${p.toString()}`)
+  },
+
+  searchCards: (q: string, colors: string[] = []) => {
+    const p = new URLSearchParams()
+    if (q) p.set('q', q)
+    colors.forEach((c) => p.append('colors', c))
+    p.set('limit', '48')
+    return get<CardSummary[]>(`/cards?${p.toString()}`)
+  },
+
   card: (id: string) => get<CardDetail>(`/cards/${id}`),
 
   combosForCard: (name: string) =>
