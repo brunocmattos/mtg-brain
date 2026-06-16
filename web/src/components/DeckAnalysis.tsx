@@ -15,6 +15,12 @@ const BRACKET_COLOR: Record<number, string> = {
   4: 'text-amber-400',
   5: 'text-red-400',
 }
+const TYPE_PT: Record<string, string> = {
+  commander: 'comandante', creature: 'criaturas', planeswalker: 'planeswalkers',
+  instant: 'instants', sorcery: 'sorceries', artifact: 'artefatos',
+  enchantment: 'encantamentos', battle: 'battles', land: 'terrenos', outro: 'outros',
+}
+const typePt = (t: string) => TYPE_PT[t] ?? t
 
 function Pips({ colors }: { colors: string[] }) {
   if (colors.length === 0) return <span className="text-xs text-muted">incolor</span>
@@ -119,7 +125,7 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
           <Pips colors={a.identity} />
         </div>
         <div className={comp.complete && comp.has_commander && comp.off_color.length === 0 ? 'text-green-400' : 'text-amber-400'}>
-          {comp.total}/100 cartas · {comp.has_commander ? 'tem comandante' : 'SEM comandante'}
+          {comp.total} de 100 cartas{comp.total < 100 ? ` (faltam ${100 - comp.total})` : ''} · {comp.has_commander ? 'tem comandante' : 'SEM comandante'}
           {comp.complete && comp.has_commander && comp.off_color.length === 0 ? ' · legal ✓' : ''}
         </div>
         {comp.off_color.length > 0 && (
@@ -144,7 +150,7 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
 
       <div className="text-xs text-muted">
         {a.total_cards} cartas · CMC médio {a.avg_cmc}
-        {a.predominant_type ? ` · predominante: ${a.predominant_type}` : ''}
+        {a.predominant_type ? ` · predominante: ${typePt(a.predominant_type)}` : ''}
       </div>
 
       <div>
@@ -164,7 +170,7 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
         <div className="flex flex-wrap gap-1 text-xs">
           {Object.entries(a.types).map(([t, n]) => (
             <span key={t} className="bg-surface-2 rounded px-2 py-0.5">
-              {t}: {n}
+              {typePt(t)}: {n}
             </span>
           ))}
         </div>

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import CommanderCard from '../components/CommanderCard'
@@ -10,11 +10,18 @@ export default function CardsPage() {
   const [q, setQ] = useState('')
   const [submitted, setSubmitted] = useState('')
   const [colors, setColors] = useState<string[]>([])
+  const [sort, setSort] = useState('edhrec')
   const [selected, setSelected] = useState<string | null>(null)
 
+  // busca ao vivo (sem precisar dar Enter)
+  useEffect(() => {
+    const t = setTimeout(() => setSubmitted(q.trim()), 350)
+    return () => clearTimeout(t)
+  }, [q])
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['cards', submitted, colors],
-    queryFn: () => api.searchCards(submitted, colors),
+    queryKey: ['cards', submitted, colors, sort],
+    queryFn: () => api.searchCards(submitted, colors, sort),
     enabled: submitted.length > 0 || colors.length > 0,
   })
 
@@ -56,6 +63,15 @@ export default function CardsPage() {
             </button>
           ))}
         </div>
+        <select value={sort} onChange={(e) => setSort(e.target.value)} title="Ordenar"
+          className="bg-surface border border-border rounded-md px-2 py-2 text-sm outline-none">
+          <option value="edhrec">Popularidade</option>
+          <option value="price_asc">Preço ↑</option>
+          <option value="price_desc">Preço ↓</option>
+          <option value="cmc_asc">CMC ↑</option>
+          <option value="cmc_desc">CMC ↓</option>
+          <option value="name">Nome</option>
+        </select>
         <button className="bg-primary text-white rounded-md px-4 py-2 text-sm font-medium">Buscar</button>
       </form>
 

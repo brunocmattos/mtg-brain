@@ -24,6 +24,32 @@ def _card_cols():
         (legalities->>'commander') AS commander_legal"""
 
 
+# Cláusulas de ordenação permitidas (whitelist — sort vem do cliente, sem injeção).
+_SORTS = {
+    "edhrec": "edhrec_rank NULLS LAST, name",
+    "name": "name",
+    "price_asc": "(prices->>'usd')::numeric ASC NULLS LAST, name",
+    "price_desc": "(prices->>'usd')::numeric DESC NULLS LAST, name",
+    "cmc_asc": "cmc ASC NULLS LAST, name",
+    "cmc_desc": "cmc DESC NULLS LAST, name",
+}
+
+
+def _order_by(sort):
+    return _SORTS.get(sort or "edhrec", _SORTS["edhrec"])
+
+
+def _limit(value, default=60, cap=200):
+    # piso 1 (LIMIT negativo derruba o Postgres), teto `cap`.
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        v = default
+    if v <= 0:
+        v = default
+    return max(1, min(v, cap))
+
+
 def _jsonable(row):
     out = {}
     for k, v in row.items():
@@ -46,8 +72,8 @@ def _rows(sql, params=None):
     return [_jsonable(r) for r in data]
 
 
-def search_cards(q=None, colors=None, limit=40):
-    where, params = [], {"limit": min(int(limit or 60), 200)}
+def search_cards(q=None, colors=None, limit=40, sort="edhrec"):
+    where, params = [], {"limit": _limit(limit)}
     if q:
         where.append("(name ILIKE %(q)s OR oracle_text ILIKE %(q)s)")
         params["q"] = f"%{q}%"
@@ -56,7 +82,7 @@ def search_cards(q=None, colors=None, limit=40):
         params["colors"] = list(colors)
     clause = " AND ".join(where) if where else "TRUE"
     sql = (f"SELECT {_card_cols()} FROM cards WHERE {clause} "
-           "ORDER BY edhrec_rank NULLS LAST, name LIMIT %(limit)s")
+           f"ORDER BY {_order_by(sort)} LIMIT %(limit)s")
     return _rows(sql, params)
 
 
@@ -80,8 +106,18 @@ def get_card(card_id):
     return card
 
 
-def list_commanders(q=None, colors=None, max_price=None, sort="edhrec", limit=40):
-    where, params = [], {"limit": min(int(limit or 60), 200)}
+def _cmc_where(where, params, cmc_min, cmc_max):
+    if cmc_min is not None:
+        where.append("cmc >= %(cmcmin)s")
+        params["cmcmin"] = float(cmc_min)
+    if cmc_max is not None:
+        where.append("cmc <= %(cmcmax)s")
+        params["cmcmax"] = float(cmc_max)
+
+
+def list_commanders(q=None, colors=None, max_price=None, sort="edhrec", limit=40,
+                    cmc_min=None, cmc_max=None):
+    where, params = [], {"limit": _limit(limit)}
     if q:
         where.append("(name ILIKE %(q)s OR type_line ILIKE %(q)s OR oracle_text ILIKE %(q)s)")
         params["q"] = f"%{q}%"
@@ -91,31 +127,33 @@ def list_commanders(q=None, colors=None, max_price=None, sort="edhrec", limit=40
     if max_price is not None:
         where.append("(prices->>'usd')::numeric <= %(maxp)s")
         params["maxp"] = float(max_price)
+    _cmc_where(where, params, cmc_min, cmc_max)
     clause = " AND ".join(where) if where else "TRUE"
-    order = "name" if sort == "name" else "edhrec_rank NULLS LAST, name"
     sql = (f"SELECT {_card_cols()} FROM commanders WHERE {clause} "
-           f"ORDER BY {order} LIMIT %(limit)s")
+           f"ORDER BY {_order_by(sort)} LIMIT %(limit)s")
     return _rows(sql, params)
 
 
-def recommend_commanders(theme, colors=None, max_price=None, limit=60):
+def recommend_commanders(theme, colors=None, max_price=None, limit=60, sort="edhrec",
+                         cmc_min=None, cmc_max=None):
     where = ["(name ILIKE %(t)s OR type_line ILIKE %(t)s OR oracle_text ILIKE %(t)s)"]
-    params = {"t": f"%{theme}%", "limit": min(int(limit or 60), 200)}
+    params = {"t": f"%{theme}%", "limit": _limit(limit)}
     if colors:
         where.append("color_identity <@ %(colors)s")
         params["colors"] = list(colors)
     if max_price is not None:
         where.append("(prices->>'usd')::numeric <= %(maxp)s")
         params["maxp"] = float(max_price)
+    _cmc_where(where, params, cmc_min, cmc_max)
     sql = (f"SELECT {_card_cols()} FROM commanders WHERE {' AND '.join(where)} "
-           "ORDER BY edhrec_rank NULLS LAST LIMIT %(limit)s")
+           f"ORDER BY {_order_by(sort)} LIMIT %(limit)s")
     return _rows(sql, params)
 
 
 def combos_for_card(name, limit=20):
     sql = ("SELECT id, card_names, color_identity, results, steps, prerequisites "
            "FROM combos WHERE %(name)s = ANY(card_names) LIMIT %(limit)s")
-    return _rows(sql, {"name": name, "limit": min(int(limit or 20), 100)})
+    return _rows(sql, {"name": name, "limit": _limit(limit, 20, 100)})
 
 
 def combos_for_identity(identity, limit=20):
@@ -123,7 +161,7 @@ def combos_for_identity(identity, limit=20):
     regex = f"^[{chars}]+$" if chars else "^$"
     sql = ("SELECT id, card_names, color_identity, results "
            "FROM combos WHERE color_identity ~ %(re)s LIMIT %(limit)s")
-    return _rows(sql, {"re": regex, "limit": min(int(limit or 20), 100)})
+    return _rows(sql, {"re": regex, "limit": _limit(limit, 20, 100)})
 
 
 def deck_price(card_names):
@@ -172,19 +210,24 @@ def create_deck(name, commander=None):
 
 
 def list_decks():
-    return _rows(
-        "SELECT id, name, commander, created_at, "
-        "(SELECT count(*) FROM deck_cards dc WHERE dc.deck_id = decks.id) AS cards "
-        "FROM decks ORDER BY created_at DESC"
-    )
+    return _rows(f"""
+        SELECT d.id, d.name, d.commander, d.created_at,
+               (SELECT COALESCE(SUM(dc.qty), 0) FROM deck_cards dc WHERE dc.deck_id = d.id) AS cards,
+               (SELECT {_img('art_crop')} FROM cards c WHERE c.name = d.commander
+                ORDER BY (c.prices->>'usd')::numeric ASC NULLS LAST LIMIT 1) AS commander_image
+        FROM decks d ORDER BY d.created_at DESC
+    """)
 
 
 def add_card(deck_id, card_name, qty=1, is_commander=False):
+    # No conflito, INCREMENTA a quantidade (não sobrescreve pra 1 — isso apagava
+    # básicos com qty alto) e nunca perde o status de comandante.
     _write(
         "INSERT INTO deck_cards (deck_id, card_name, qty, is_commander) "
         "VALUES (%(d)s, %(n)s, %(q)s, %(c)s) "
-        "ON CONFLICT (deck_id, card_name) DO UPDATE SET qty=EXCLUDED.qty, "
-        "is_commander=EXCLUDED.is_commander",
+        "ON CONFLICT (deck_id, card_name) DO UPDATE "
+        "SET qty = deck_cards.qty + EXCLUDED.qty, "
+        "    is_commander = deck_cards.is_commander OR EXCLUDED.is_commander",
         {"d": deck_id, "n": card_name, "q": qty, "c": is_commander},
     )
     return {"ok": True}
@@ -193,6 +236,12 @@ def add_card(deck_id, card_name, qty=1, is_commander=False):
 def remove_card(deck_id, card_name):
     _write("DELETE FROM deck_cards WHERE deck_id=%(d)s AND card_name=%(n)s",
            {"d": deck_id, "n": card_name})
+    return {"ok": True}
+
+
+def delete_deck(deck_id):
+    # deck_cards cai sozinho por ON DELETE CASCADE — uma transação só.
+    _write("DELETE FROM decks WHERE id=%(d)s", {"d": deck_id})
     return {"ok": True}
 
 
@@ -235,6 +284,16 @@ def _bucket(type_line):
         if key in t:
             return key
     return "outro"
+
+
+# Terrenos básicos são "grátis" (assume-se que você os tem) — não entram no preço.
+# A tabela é oracle-cards (1 impressão por nome), e a do Swamp vem marcada ~US$2,
+# então contar básicos inflaria o preço de forma irreal.
+BASIC_LAND_NAMES = {
+    "Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes",
+    "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp",
+    "Snow-Covered Mountain", "Snow-Covered Forest", "Snow-Covered Wastes",
+}
 
 
 def _is_ramp(bucket, text):
@@ -362,6 +421,8 @@ def _deck_bracket(gc, two_card_combos, mld, extra_turns, total_combos):
 
 
 def deck_analysis(deck_id):
+    if not _rows("SELECT 1 FROM decks WHERE id=%(id)s", {"id": deck_id}):
+        return None  # deck inexistente → a rota devolve 404 (em vez de análise vazia falsa)
     cards = _deck_cards(deck_id)
     total = sum((r["qty"] or 1) for r in cards)
     types, colors = {}, {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0}
@@ -391,7 +452,9 @@ def deck_analysis(deck_id):
             draw += q
         if _is_interaction(r["oracle_text"]):
             interaction += q
-        if r["usd"] is not None:
+        if r["name"] in BASIC_LAND_NAMES:
+            pass  # básicos não contam no preço
+        elif r["usd"] is not None:
             price += float(r["usd"]) * q
         else:
             missing_price.append(r["name"])
@@ -462,9 +525,10 @@ def suggest_cards(commander_name, limit=40):
         LIMIT %(limit)s
     """
     return _rows(sql, {"pieces": pieces, "identity": identity, "cmd": commander_name,
-                       "limit": min(int(limit or 40), 100)})
+                       "limit": _limit(limit, 40, 100)})
 
 
 def symbol_map():
     """{ '{W}': svg_uri, '{T}': svg_uri, ... } — símbolos oficiais do Scryfall."""
     return {r["symbol"]: r["svg_uri"] for r in _rows("SELECT symbol, svg_uri FROM card_symbols")}
+

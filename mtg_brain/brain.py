@@ -9,8 +9,11 @@ e responde fundamentado nos dados reais (cartas, combos, regras, rulings, sets).
 """
 import datetime
 import json
+import logging
 
 from . import config, db
+
+log = logging.getLogger(__name__)
 
 SYSTEM = """Você é um especialista em Magic: The Gathering (foco em Commander/EDH) com acesso a um \
 banco Postgres COMPLETO e atualizado (2026). Responda em português brasileiro, SEMPRE com base em \
@@ -161,9 +164,10 @@ def ask(question, model=None, max_steps=8, verbose=False):
                 continue
             return (msg.content or "").strip()
         return "(parei após várias consultas sem chegar a uma resposta final)"
-    except Exception as e:
+    except Exception:
+        # detalhe (base_url/modelo/exceção) vai pro log do servidor, NÃO pro usuário.
+        log.exception("Falha ao chamar o LLM (base_url=%s, modelo=%s)", config.LLM_BASE_URL, model)
         return (
-            f"Erro ao falar com o LLM (base_url={config.LLM_BASE_URL}, modelo={model}): {e}\n"
-            "Se for Ollama: confira se o serviço está rodando e se o modelo (LLM_MODEL) "
-            "foi baixado — ex.: ollama pull qwen2.5:14b."
+            "⚠️ Não consegui falar com o modelo agora. Se estiver usando o Ollama local, "
+            "confira se o serviço está rodando e se o modelo foi baixado."
         )

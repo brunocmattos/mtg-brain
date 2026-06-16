@@ -4,6 +4,7 @@ Rotas sob /api. Em produção, serve o build do React (web/dist) na raiz.
 Rode com:  uvicorn mtg_brain.api.app:app --port 8000
 """
 import os
+from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,13 +63,14 @@ def symbols():
 
 
 @api.get("/cards")
-def cards(q: str | None = None, colors: list[str] | None = Query(None), limit: int = 40):
-    return queries.search_cards(q, colors, limit)
+def cards(q: str | None = None, colors: list[str] | None = Query(None), limit: int = 40,
+          sort: str = "edhrec"):
+    return queries.search_cards(q, colors, limit, sort)
 
 
 @api.get("/cards/{card_id}")
-def card(card_id: str):
-    c = queries.get_card(card_id)
+def card(card_id: UUID):  # UUID inválido → 422 (em vez de 500 no cast do Postgres)
+    c = queries.get_card(str(card_id))
     if not c:
         raise HTTPException(status_code=404, detail="carta não encontrada")
     return c
@@ -81,8 +83,10 @@ def commanders(
     max_price: float | None = None,
     sort: str = "edhrec",
     limit: int = 40,
+    cmc_min: float | None = None,
+    cmc_max: float | None = None,
 ):
-    return queries.list_commanders(q, colors, max_price, sort, limit)
+    return queries.list_commanders(q, colors, max_price, sort, limit, cmc_min, cmc_max)
 
 
 @api.get("/commanders/recommend")
@@ -91,8 +95,11 @@ def recommend(
     colors: list[str] | None = Query(None),
     max_price: float | None = None,
     limit: int = 12,
+    sort: str = "edhrec",
+    cmc_min: float | None = None,
+    cmc_max: float | None = None,
 ):
-    return queries.recommend_commanders(theme, colors, max_price, limit)
+    return queries.recommend_commanders(theme, colors, max_price, limit, sort, cmc_min, cmc_max)
 
 
 @api.get("/combos")
@@ -138,6 +145,11 @@ def get_deck(deck_id: int):
     return d
 
 
+@api.delete("/decks/{deck_id}")
+def delete_deck(deck_id: int):
+    return queries.delete_deck(deck_id)
+
+
 @api.post("/decks/{deck_id}/cards")
 def add_card(deck_id: int, body: DeckCardBody):
     return queries.add_card(deck_id, body.card_name, body.qty, body.is_commander)
@@ -150,7 +162,10 @@ def remove_card(deck_id: int, name: str):
 
 @api.get("/decks/{deck_id}/analysis")
 def deck_analysis(deck_id: int):
-    return queries.deck_analysis(deck_id)
+    a = queries.deck_analysis(deck_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="deck não encontrado")
+    return a
 
 
 @api.get("/commanders/suggest")

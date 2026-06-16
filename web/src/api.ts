@@ -43,6 +43,7 @@ export interface DeckSummary {
   commander: string | null
   created_at: string
   cards?: number
+  commander_image?: string | null
 }
 
 export interface DeckCardRow {
@@ -123,28 +124,40 @@ async function del<T>(path: string): Promise<T> {
 export const api = {
   stats: () => get<Record<string, number>>('/stats'),
 
-  recommendCommanders: (theme: string, colors: string[] = [], maxPrice?: number) => {
+  recommendCommanders: (
+    theme: string, colors: string[] = [], maxPrice?: number, sort = 'edhrec',
+    cmcMin?: number, cmcMax?: number,
+  ) => {
     const p = new URLSearchParams()
     if (theme) p.set('theme', theme)
     colors.forEach((c) => p.append('colors', c))
     if (maxPrice != null) p.set('max_price', String(maxPrice))
+    if (cmcMin != null) p.set('cmc_min', String(cmcMin))
+    if (cmcMax != null) p.set('cmc_max', String(cmcMax))
+    p.set('sort', sort)
     p.set('limit', '100')
     return get<CardSummary[]>(`/commanders/recommend?${p.toString()}`)
   },
 
-  listCommanders: (colors: string[] = [], maxPrice?: number, sort = 'edhrec') => {
+  listCommanders: (
+    colors: string[] = [], maxPrice?: number, sort = 'edhrec',
+    cmcMin?: number, cmcMax?: number,
+  ) => {
     const p = new URLSearchParams()
     colors.forEach((c) => p.append('colors', c))
     if (maxPrice != null) p.set('max_price', String(maxPrice))
+    if (cmcMin != null) p.set('cmc_min', String(cmcMin))
+    if (cmcMax != null) p.set('cmc_max', String(cmcMax))
     p.set('sort', sort)
     p.set('limit', '100')
     return get<CardSummary[]>(`/commanders?${p.toString()}`)
   },
 
-  searchCards: (q: string, colors: string[] = []) => {
+  searchCards: (q: string, colors: string[] = [], sort = 'edhrec') => {
     const p = new URLSearchParams()
     if (q) p.set('q', q)
     colors.forEach((c) => p.append('colors', c))
+    p.set('sort', sort)
     p.set('limit', '100')
     return get<CardSummary[]>(`/cards?${p.toString()}`)
   },
@@ -155,19 +168,28 @@ export const api = {
     get<Combo[]>(`/combos?card=${encodeURIComponent(name)}&limit=15`),
 
   chat: async (question: string): Promise<{ answer: string }> => {
-    const r = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
-    })
-    if (!r.ok) throw new Error(`${r.status}`)
-    return r.json() as Promise<{ answer: string }>
+    // modelo local pode demorar; corta em 120s pra não travar a UI pra sempre
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 120_000)
+    try {
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+        signal: ctrl.signal,
+      })
+      if (!r.ok) throw new Error(`${r.status}`)
+      return r.json() as Promise<{ answer: string }>
+    } finally {
+      clearTimeout(timer)
+    }
   },
 
   listDecks: () => get<DeckSummary[]>('/decks'),
   createDeck: (name: string, commander: string | null) =>
     post<DeckSummary>('/decks', { name, commander }),
   getDeck: (id: number) => get<Deck>(`/decks/${id}`),
+  deleteDeck: (id: number) => del<{ ok: boolean }>(`/decks/${id}`),
   addCard: (id: number, card_name: string, is_commander = false) =>
     post<{ ok: boolean }>(`/decks/${id}/cards`, { card_name, qty: 1, is_commander }),
   removeCard: (id: number, name: string) =>

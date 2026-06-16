@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import CommanderCard from '../components/CommanderCard'
@@ -14,13 +14,20 @@ export default function CommandersPage() {
   const [sort, setSort] = useState('edhrec')
   const [selected, setSelected] = useState<string | null>(null)
 
-  const price = maxPrice ? Number(maxPrice) : undefined
+  // só manda o filtro se for um número válido (evita 422 com "1.2.3" ou NaN com ".")
+  const price = maxPrice && Number.isFinite(Number(maxPrice)) ? Number(maxPrice) : undefined
+
+  // busca ao vivo (sem precisar dar Enter)
+  useEffect(() => {
+    const t = setTimeout(() => setSubmitted(theme.trim()), 350)
+    return () => clearTimeout(t)
+  }, [theme])
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['commanders', submitted, colors, price, sort],
     queryFn: () =>
       submitted
-        ? api.recommendCommanders(submitted, colors, price)
+        ? api.recommendCommanders(submitted, colors, price, sort)
         : api.listCommanders(colors, price, sort),
   })
 
@@ -70,11 +77,14 @@ export default function CommandersPage() {
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          disabled={!!submitted}
-          title={submitted ? 'Ordenação fixa no modo tema' : 'Ordenar'}
-          className="bg-surface border border-border rounded-md px-2 py-2 text-sm outline-none disabled:opacity-50"
+          title="Ordenar"
+          className="bg-surface border border-border rounded-md px-2 py-2 text-sm outline-none"
         >
-          <option value="edhrec">Rank EDH</option>
+          <option value="edhrec">Popularidade</option>
+          <option value="price_asc">Preço ↑</option>
+          <option value="price_desc">Preço ↓</option>
+          <option value="cmc_asc">CMC ↑</option>
+          <option value="cmc_desc">CMC ↓</option>
           <option value="name">Nome</option>
         </select>
         <button className="bg-primary text-white rounded-md px-4 py-2 text-sm font-medium">Buscar</button>
@@ -96,9 +106,7 @@ export default function CommandersPage() {
       {error && <p className="text-red-400">Erro ao buscar. O backend está rodando em :8000?</p>}
       {data && data.length === 0 && <p className="text-muted">Nada encontrado.</p>}
       {data && data.length > 0 && (
-        <p className="text-muted text-xs mb-2">
-          {data.length} comandante(s) — ordenados por popularidade (EDHREC)
-        </p>
+        <p className="text-muted text-xs mb-2">{data.length} comandante(s)</p>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import type { Combo } from '../api'
@@ -59,12 +59,26 @@ export default function CardDetailModal({
   id: string
   onClose: () => void
 }) {
-  const { data: card } = useQuery({ queryKey: ['card', id], queryFn: () => api.card(id) })
+  const { data: card, isError } = useQuery({ queryKey: ['card', id], queryFn: () => api.card(id) })
   const { data: combos } = useQuery({
     queryKey: ['combos', card?.name],
     queryFn: () => api.combosForCard(card!.name),
     enabled: !!card?.name,
   })
+
+  // Esc fecha; trava o scroll do fundo
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [onClose])
 
   return (
     <div
@@ -75,7 +89,12 @@ export default function CardDetailModal({
         className="bg-surface border border-border rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {!card ? (
+        {isError ? (
+          <div className="p-8 flex items-start justify-between gap-2">
+            <span className="text-red-400 text-sm">Erro ao carregar a carta.</span>
+            <button onClick={onClose} className="text-muted hover:text-text text-lg leading-none">✕</button>
+          </div>
+        ) : !card ? (
           <div className="p-8 text-muted">Carregando…</div>
         ) : (
           <div className="flex flex-col md:flex-row gap-4 p-4">
