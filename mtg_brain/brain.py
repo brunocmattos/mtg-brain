@@ -159,6 +159,6 @@ def ask(question, model=None, max_steps=8, verbose=False):
     except Exception as e:
         return (
             f"Erro ao falar com o LLM (base_url={config.LLM_BASE_URL}, modelo={model}): {e}\n"
-            "Se for Ollama: confira se está rodando (o serviço sobe sozinho no Windows) "
-            "e se o modelo foi baixado — ex.: ollama pull qwen2.5:7b."
+            "Se for Ollama: confira se o serviço está rodando e se o modelo (LLM_MODEL) "
+            "foi baixado — ex.: ollama pull qwen2.5:14b."
         )

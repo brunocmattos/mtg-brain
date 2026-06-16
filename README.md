@@ -76,7 +76,7 @@ fundamentado nos dados, citando cartas e regras. Backend padrão: **Ollama local
 
 Pré-requisito (uma vez): instale o [Ollama](https://ollama.com) e baixe um modelo com tool calling:
 ```powershell
-ollama pull qwen2.5:7b      # ~4.7 GB; 14b é mais esperto se a GPU der conta
+ollama pull qwen2.5:14b     # ~9 GB; roda 100% na GPU AMD via Vulkan (~32 tok/s). 7b = fallback rápido.
 ```
 Depois:
 ```powershell

@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+/* Tema dark roxo/preto + acento ouro (dreno / mortos-vivos) */
+@theme {
+  --color-bg: #0b0710;
+  --color-surface: #171120;
+  --color-surface-2: #211731;
+  --color-border: #2e2140;
+  --color-text: #e9e3f5;
+  --color-muted: #9a8cb5;
+  --color-primary: #7c3aed;
+  --color-accent: #d4af37;
+  --color-blood: #7f1d2e;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Markdown das respostas do chat */
+.md p { margin: 0.3rem 0; }
+.md ul, .md ol { margin: 0.3rem 0; padding-left: 1.2rem; }
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+.md strong { color: var(--color-accent); }
+.md code {
+  background: var(--color-surface-2);
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
