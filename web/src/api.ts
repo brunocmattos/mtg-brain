@@ -51,7 +51,7 @@ export const api = {
     if (theme) p.set('theme', theme)
     colors.forEach((c) => p.append('colors', c))
     if (maxPrice != null) p.set('max_price', String(maxPrice))
-    p.set('limit', '24')
+    p.set('limit', '100')
     return get<CardSummary[]>(`/commanders/recommend?${p.toString()}`)
   },
 
@@ -60,7 +60,7 @@ export const api = {
     colors.forEach((c) => p.append('colors', c))
     if (maxPrice != null) p.set('max_price', String(maxPrice))
     p.set('sort', sort)
-    p.set('limit', '48')
+    p.set('limit', '100')
     return get<CardSummary[]>(`/commanders?${p.toString()}`)
   },
 
@@ -68,7 +68,7 @@ export const api = {
     const p = new URLSearchParams()
     if (q) p.set('q', q)
     colors.forEach((c) => p.append('colors', c))
-    p.set('limit', '48')
+    p.set('limit', '100')
     return get<CardSummary[]>(`/cards?${p.toString()}`)
   },
 

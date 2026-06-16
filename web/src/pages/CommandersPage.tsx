@@ -95,6 +95,11 @@ export default function CommandersPage() {
       {isLoading && <p className="text-muted">Carregando…</p>}
       {error && <p className="text-red-400">Erro ao buscar. O backend está rodando em :8000?</p>}
       {data && data.length === 0 && <p className="text-muted">Nada encontrado.</p>}
+      {data && data.length > 0 && (
+        <p className="text-muted text-xs mb-2">
+          {data.length} comandante(s) — ordenados por popularidade (EDHREC)
+        </p>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {data?.map((c) => (
