@@ -134,6 +134,9 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
           {a.bracket.level} · {a.bracket.name}
         </div>
         <div className="text-[10px] text-muted">{a.bracket.reason}</div>
+        {a.bracket.note && (
+          <div className="text-[10px] text-amber-400/90 mt-1">⚠ {a.bracket.note}</div>
+        )}
         {a.game_changers.length > 0 && (
           <div className="text-[10px] text-muted mt-1">Game changers: {a.game_changers.join(', ')}</div>
         )}

@@ -88,7 +88,7 @@ export interface DeckAnalysisData {
   colors: Record<string, number>
   identity: string[]
   completeness: { total: number; complete: boolean; has_commander: boolean; off_color: string[] }
-  bracket: { level: number; name: string; reason: string }
+  bracket: { level: number; name: string; reason: string; note: string | null }
   game_changers: string[]
   health: { lands: Health; ramp: Health; draw: Health; interaction: Health }
   price_usd: number

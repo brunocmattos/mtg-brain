@@ -320,31 +320,44 @@ def _is_win_combo(combo):
     return "infinite" in txt or "loses the game" in txt or "wins the game" in txt
 
 
-def _deck_bracket(gc, two_card_win, mld, extra_turns, total_combos):
-    """Estimativa de bracket WotC seguindo as RESTRIÇÕES oficiais (não é veredito oficial).
-    Combo infinito de 2 cartas, >3 game changers, destruição em massa de terra ou turnos
-    extras são proibidos nos brackets 1-3 — então jogam o deck pro 4 (Optimized)."""
-    blockers = []
-    if two_card_win:
-        blockers.append("combo infinito de 2 cartas")
-    if mld:
-        blockers.append("destruição em massa de terrenos")
-    if extra_turns:
-        blockers.append("turnos extras")
+def _deck_bracket(gc, two_card_combos, mld, extra_turns, total_combos):
+    """Estimativa de bracket WotC (NÃO é veredito oficial).
+
+    Regras (Brackets beta): bracket 3 permite até 3 game changers e combos de 2 cartas
+    *desde que* não montem antes do turno 6; proíbe MLD e encadeamento de turnos extras.
+    Bracket 4 não tem restrição (além do banido).
+
+    Só dá pra detectar com CONFIANÇA o que joga pro 4: >3 game changers, MLD, turnos extras.
+    A velocidade do combo (antes/depois do turno 6) NÃO dá pra medir automaticamente — então
+    combos de 2 cartas viram um AVISO, não um veredito."""
+    hard = []
     if len(gc) > 3:
-        blockers.append(f"{len(gc)} game changers (>3)")
-    if blockers:
+        hard.append(f"{len(gc)} game changers (bracket 3 permite até 3)")
+    if mld:
+        hard.append("destruição em massa de terrenos")
+    if extra_turns:
+        hard.append("encadeamento de turnos extras")
+
+    note = None
+    if two_card_combos:
+        note = (
+            f"{two_card_combos} combo(s) de 2 cartas presente(s). Pela regra, se algum montar "
+            "ANTES do turno 6 o deck é Bracket 4; combos tardios cabem no 3. A velocidade não dá "
+            "pra calcular automaticamente — esse julgamento é seu."
+        )
+
+    if hard:
         return {"level": 4, "name": "Optimized (alto poder)",
-                "reason": "proibido nos brackets 1-3: " + ", ".join(blockers)}
+                "reason": "proibido nos brackets 1-3: " + "; ".join(hard), "note": note}
     if gc or total_combos:
         det = []
         if gc:
-            det.append(f"{len(gc)} game changer(s) (bracket 3 permite até 3)")
+            det.append(f"{len(gc)} game changer(s) (até 3 é permitido)")
         if total_combos:
-            det.append(f"{total_combos} combo(s) tardio(s)")
-        return {"level": 3, "name": "Upgraded", "reason": "; ".join(det)}
+            det.append(f"{total_combos} combo(s) presente(s)")
+        return {"level": 3, "name": "Upgraded", "reason": "; ".join(det), "note": note}
     return {"level": 2, "name": "Core",
-            "reason": "sem game changers, combos, MLD ou turnos extras"}
+            "reason": "sem game changers, combos, MLD ou turnos extras", "note": None}
 
 
 def deck_analysis(deck_id):
@@ -395,7 +408,7 @@ def deck_analysis(deck_id):
     gc = sorted({r["name"] for r in cards if r["name"] in GAME_CHANGERS})
     mld = any(_is_mld(r["name"], r["oracle_text"]) for r in cards)
     extra_turns = any(_is_extra_turn(r["oracle_text"]) for r in cards)
-    two_card_win = any(_is_win_combo(c) for c in combos_present)
+    two_card_win = sum(1 for c in combos_present if _is_win_combo(c))
 
     return {
         "total_cards": total,

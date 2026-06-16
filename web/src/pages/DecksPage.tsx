@@ -111,6 +111,12 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
   const add = useMutation({ mutationFn: (c: CardSummary) => api.addCard(id, c.name), onSuccess: () => { refresh(); clearSearch() } })
   const remove = useMutation({ mutationFn: (name: string) => api.removeCard(id, name), onSuccess: refresh })
 
+  const total = deck?.cards.reduce((s, c) => s + c.qty, 0) ?? 0
+  const tryAdd = (c: CardSummary) => {
+    if (total >= 100 && !window.confirm(`O deck já tem ${total} cartas (limite 100). Adicionar assim mesmo?`)) return
+    add.mutate(c)
+  }
+
   const showResults = submitted.length > 0 && (search.data?.length ?? 0) > 0
   const groups: Record<string, DeckCardRow[]> = {}
   for (const c of deck?.cards ?? []) (groups[bucket(c)] ??= []).push(c)
@@ -135,7 +141,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
           {showResults && (
             <div className="mb-4 max-h-44 overflow-y-auto bg-surface border border-border rounded-md divide-y divide-border">
               {search.data!.slice(0, 15).map((c) => (
-                <button key={c.id} onClick={() => add.mutate(c)} onMouseEnter={() => setPreview(c.image)} onMouseLeave={() => setPreview(null)}
+                <button key={c.id} onClick={() => tryAdd(c)} onMouseEnter={() => setPreview(c.image)} onMouseLeave={() => setPreview(null)}
                   className="w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 flex justify-between">
                   <span>{c.name}</span>
                   <span className="text-muted text-xs">{c.usd != null ? `$${c.usd.toFixed(2)} · ` : ''}+ add</span>
@@ -163,7 +169,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
               <h3 className="text-sm font-semibold mb-2">Sugestões pro {deck?.commander}</h3>
               <div className="flex flex-wrap gap-1.5">
                 {suggestions.data.slice(0, 18).map((c) => (
-                  <button key={c.id} onClick={() => add.mutate(c)} onMouseEnter={() => setPreview(c.image)} onMouseLeave={() => setPreview(null)}
+                  <button key={c.id} onClick={() => tryAdd(c)} onMouseEnter={() => setPreview(c.image)} onMouseLeave={() => setPreview(null)}
                     className="text-xs bg-surface-2 rounded px-2 py-1 hover:bg-border" title="adicionar ao deck">
                     + {c.name}
                   </button>
