@@ -201,11 +201,12 @@ def _deck_cards(deck_id):
     return _rows(f"""
         SELECT dc.card_name AS name, dc.qty, dc.is_commander, c.id::text AS id,
                c.type_line, c.cmc, c.mana_cost, c.color_identity, c.oracle_text,
-               c.usd, c.image
+               c.usd, c.image, c.art_crop
         FROM deck_cards dc
         LEFT JOIN LATERAL (
             SELECT id, type_line, cmc, mana_cost, color_identity, oracle_text,
-                   (prices->>'usd')::numeric AS usd, {_img('normal')} AS image
+                   (prices->>'usd')::numeric AS usd, {_img('normal')} AS image,
+                   {_img('art_crop')} AS art_crop
             FROM cards WHERE name = dc.card_name
             ORDER BY (prices->>'usd')::numeric ASC NULLS LAST LIMIT 1
         ) c ON true
@@ -462,3 +463,8 @@ def suggest_cards(commander_name, limit=40):
     """
     return _rows(sql, {"pieces": pieces, "identity": identity, "cmd": commander_name,
                        "limit": min(int(limit or 40), 100)})
+
+
+def symbol_map():
+    """{ '{W}': svg_uri, '{T}': svg_uri, ... } — símbolos oficiais do Scryfall."""
+    return {r["symbol"]: r["svg_uri"] for r in _rows("SELECT symbol, svg_uri FROM card_symbols")}

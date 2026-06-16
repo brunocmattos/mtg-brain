@@ -33,7 +33,7 @@ export default function CommandersPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-1">Comandantes</h1>
+      <h1 className="font-display text-2xl font-bold mb-1">Comandantes</h1>
       <p className="text-muted text-sm mb-4">
         Por padrão, os mais jogados (rank EDHREC). Busque um tema (ex.: <em>vampire</em>,{' '}
         <em>zombie</em>, <em>sacrifice</em>) ou filtre por cor e preço.

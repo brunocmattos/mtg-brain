@@ -1,7 +1,9 @@
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&display=swap");
 @import "tailwindcss";
 
 /* Tema dark roxo/preto + acento ouro (dreno / mortos-vivos) */
 @theme {
+  --font-display: "Cinzel", ui-serif, Georgia, serif;
   --color-bg: #0b0710;
   --color-surface: #171120;
   --color-surface-2: #211731;

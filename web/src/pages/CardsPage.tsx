@@ -29,7 +29,7 @@ export default function CardsPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-1">Cartas</h1>
+      <h1 className="font-display text-2xl font-bold mb-1">Cartas</h1>
       <p className="text-muted text-sm mb-4">
         Busque qualquer carta por nome ou texto (ex.: <em>Sol Ring</em>,{' '}
         <em>destroy target creature</em>, <em>loses life</em>) e filtre por cor.

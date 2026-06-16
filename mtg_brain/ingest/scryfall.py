@@ -216,3 +216,20 @@ def ingest_prices():
         conn.commit()
     print(f"    faltando usd: {len(missing)} | preenchidos: {filled}")
     return filled
+
+
+# -------------------------------------------------------------------------- symbols
+
+SYMBOL_UPSERT = """
+INSERT INTO card_symbols (symbol, svg_uri) VALUES (%(s)s, %(u)s)
+ON CONFLICT (symbol) DO UPDATE SET svg_uri = EXCLUDED.svg_uri;
+"""
+
+
+def ingest_symbols():
+    """Símbolos oficiais do Scryfall: /symbology dá o SVG oficial de cada símbolo."""
+    data = http.get_json(config.SCRYFALL_API + "/symbology")
+    rows = [{"s": e["symbol"], "u": e.get("svg_uri")}
+            for e in data.get("data", []) if e.get("svg_uri")]
+    with db.connect() as conn:
+        return db.upsert_batch(conn, SYMBOL_UPSERT, rows)

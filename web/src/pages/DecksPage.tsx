@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import type { CardSummary, DeckCardRow } from '../api'
 import DeckAnalysis from '../components/DeckAnalysis'
+import { ManaCost } from '../components/Mana'
 
 export default function DecksPage() {
   const [selected, setSelected] = useState<number | null>(null)
@@ -27,7 +28,7 @@ function DeckList({ onOpen }: { onOpen: (id: number) => void }) {
   })
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-4">Meus decks</h1>
+      <h1 className="font-display text-2xl font-bold mb-4">Meus decks</h1>
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -93,6 +94,7 @@ function CardLine({
         {c.qty > 1 ? ` ×${c.qty}` : ''}
       </button>
       <span className="flex items-center gap-2 text-xs text-muted shrink-0 pl-2">
+        <ManaCost cost={c.mana_cost} />
         <span>{c.usd != null ? `$${c.usd.toFixed(2)}` : '—'}</span>
         <button onClick={onRemove} className="hover:text-red-400" title="remover">✕</button>
       </span>
@@ -141,16 +143,19 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
 
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="lg:flex-1 min-w-0">
-          <div className="flex gap-4 items-start mb-4">
-            {commander?.image && (
-              <button onClick={() => setPinned(commander.image)} className="shrink-0" title="fixar carta no canto">
-                <img src={commander.image} alt={deck?.commander ?? ''} className="w-28 rounded-lg border border-border hover:border-primary transition" />
-              </button>
+          <div
+            className="relative rounded-xl overflow-hidden border border-border mb-4 cursor-pointer h-36"
+            onClick={() => commander?.image && setPinned(commander.image)}
+            title="fixar comandante no canto"
+          >
+            {commander?.art_crop && (
+              <img src={commander.art_crop} alt="" className="absolute inset-0 w-full h-full object-cover" />
             )}
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold">{deck?.name}</h1>
-              <p className="text-muted text-sm">{deck?.commander ?? 'sem comandante'}</p>
-              <p className="text-muted text-xs mt-1">
+            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/60 to-bg/10" />
+            <div className="absolute bottom-0 left-0 p-4">
+              <h1 className="font-display text-2xl font-bold drop-shadow-lg">{deck?.name}</h1>
+              <p className="text-accent text-sm">{deck?.commander ?? 'sem comandante'}</p>
+              <p className="text-muted text-xs">
                 {analysis?.total_cards ?? total} cartas{deck ? ` (${deck.cards.length} únicas)` : ''}
               </p>
             </div>

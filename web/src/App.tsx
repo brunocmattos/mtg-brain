@@ -9,7 +9,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-border bg-surface sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-6">
-          <span className="font-bold text-accent text-lg tracking-wide">mtg-brain</span>
+          <span className="font-display font-bold text-accent text-lg tracking-wider">mtg-brain</span>
           <nav className="flex gap-1">
             <Tab to="/commanders" label="Comandantes" />
             <Tab to="/cards" label="Cartas" />

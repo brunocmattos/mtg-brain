@@ -56,6 +56,7 @@ export interface DeckCardRow {
   color_identity: string[] | null
   usd: number | null
   image: string | null
+  art_crop: string | null
 }
 
 export interface Deck {
@@ -174,4 +175,5 @@ export const api = {
   deckAnalysis: (id: number) => get<DeckAnalysisData>(`/decks/${id}/analysis`),
   suggest: (commander: string) =>
     get<CardSummary[]>(`/commanders/suggest?commander=${encodeURIComponent(commander)}&limit=30`),
+  symbols: () => get<Record<string, string>>('/symbols'),
 }

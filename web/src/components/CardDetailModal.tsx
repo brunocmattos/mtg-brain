@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import type { Combo } from '../api'
 import CardImage from './CardImage'
+import { ManaCost, OracleText } from './Mana'
 
 function ComboItem({ combo }: { combo: Combo }) {
   const [open, setOpen] = useState(false)
@@ -91,13 +92,16 @@ export default function CardDetailModal({
                 </button>
               </div>
               <div className="text-sm text-muted">{card.type_line}</div>
-              <div className="text-sm mt-1">
-                {card.mana_cost} · EDHREC #{card.edhrec_rank ?? '—'} ·{' '}
+              <div className="text-sm mt-1 flex items-center gap-1.5 flex-wrap">
+                <ManaCost cost={card.mana_cost} />
+                <span>· EDHREC #{card.edhrec_rank ?? '—'} ·</span>
                 <span className="text-accent">
                   {card.usd != null ? `$${card.usd.toFixed(2)}` : 's/ preço'}
                 </span>
               </div>
-              <p className="text-sm mt-3 whitespace-pre-wrap">{card.oracle_text}</p>
+              <p className="text-sm mt-3">
+                <OracleText text={card.oracle_text} />
+              </p>
 
               <h3 className="text-accent text-sm font-semibold mt-4 mb-1">
                 Combos ({combos?.length ?? 0}) {combos && combos.length > 0 && (

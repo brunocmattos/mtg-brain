@@ -56,6 +56,11 @@ def stats():
     return db.counts()
 
 
+@api.get("/symbols")
+def symbols():
+    return queries.symbol_map()
+
+
 @api.get("/cards")
 def cards(q: str | None = None, colors: list[str] | None = Query(None), limit: int = 40):
     return queries.search_cards(q, colors, limit)
