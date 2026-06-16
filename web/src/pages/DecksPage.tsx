@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import type { CardSummary, DeckCardRow } from '../api'
 import DeckAnalysis from '../components/DeckAnalysis'
-import CardDetailModal from '../components/CardDetailModal'
 
 export default function DecksPage() {
   const [selected, setSelected] = useState<number | null>(null)
@@ -75,12 +74,12 @@ function CardLine({
   c,
   onRemove,
   onHover,
-  onOpen,
+  onPin,
 }: {
   c: DeckCardRow
   onRemove: () => void
   onHover: (img: string | null) => void
-  onOpen: () => void
+  onPin: (img: string | null) => void
 }) {
   return (
     <div
@@ -88,7 +87,7 @@ function CardLine({
       onMouseLeave={() => onHover(null)}
       className="flex items-center justify-between rounded px-2 py-1 text-sm hover:bg-surface-2"
     >
-      <button onClick={onOpen} className={`truncate text-left hover:text-primary ${c.is_commander ? 'text-accent' : ''}`}>
+      <button onClick={() => onPin(c.image)} className={`truncate text-left hover:text-primary ${c.is_commander ? 'text-accent' : ''}`}>
         {c.is_commander ? '★ ' : ''}
         {c.name}
         {c.qty > 1 ? ` ×${c.qty}` : ''}
@@ -107,8 +106,8 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
   const { data: analysis } = useQuery({ queryKey: ['deck-analysis', id], queryFn: () => api.deckAnalysis(id) })
   const [q, setQ] = useState('')
   const [submitted, setSubmitted] = useState('')
-  const [preview, setPreview] = useState<string | null>(null)
-  const [openCard, setOpenCard] = useState<string | null>(null)
+  const [hovered, setHovered] = useState<string | null>(null)
+  const [pinned, setPinned] = useState<string | null>(null)
   const search = useQuery({ queryKey: ['cardsearch', submitted], queryFn: () => api.searchCards(submitted), enabled: submitted.length > 0 })
   const suggestions = useQuery({ queryKey: ['suggest', deck?.commander], queryFn: () => api.suggest(deck!.commander!), enabled: !!deck?.commander })
 
@@ -128,6 +127,8 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
     if (total >= 100 && !window.confirm(`O deck já tem ${total} cartas (limite 100). Adicionar assim mesmo?`)) return
     add.mutate(c)
   }
+  // imagem fixada (clique) tem prioridade; senão, a do hover.
+  const shown = pinned ?? hovered
 
   const showResults = submitted.length > 0 && (search.data?.length ?? 0) > 0
   const commander = deck?.cards.find((c) => c.is_commander)
@@ -140,10 +141,9 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
 
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="lg:flex-1 min-w-0">
-          {/* banner do comandante */}
           <div className="flex gap-4 items-start mb-4">
             {commander?.image && (
-              <button onClick={() => commander.id && setOpenCard(commander.id)} className="shrink-0" title="ver carta">
+              <button onClick={() => setPinned(commander.image)} className="shrink-0" title="fixar carta no canto">
                 <img src={commander.image} alt={deck?.commander ?? ''} className="w-28 rounded-lg border border-border hover:border-primary transition" />
               </button>
             )}
@@ -165,7 +165,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
           {showResults && (
             <div className="mb-4 max-h-44 overflow-y-auto bg-surface border border-border rounded-md divide-y divide-border">
               {search.data!.slice(0, 15).map((c) => (
-                <button key={c.id} onClick={() => tryAdd(c)} onMouseEnter={() => setPreview(c.image)} onMouseLeave={() => setPreview(null)}
+                <button key={c.id} onClick={() => tryAdd(c)} onMouseEnter={() => setHovered(c.image)} onMouseLeave={() => setHovered(null)}
                   className="w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 flex justify-between">
                   <span>{c.name}</span>
                   <span className="text-muted text-xs">{c.usd != null ? `$${c.usd.toFixed(2)} · ` : ''}+ add</span>
@@ -182,7 +182,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
                   {TYPE_LABEL[t]} ({groups[t].reduce((s, c) => s + c.qty, 0)})
                 </h3>
                 {groups[t].map((c) => (
-                  <CardLine key={c.name} c={c} onRemove={() => remove.mutate(c.name)} onHover={setPreview} onOpen={() => c.id && setOpenCard(c.id)} />
+                  <CardLine key={c.name} c={c} onRemove={() => remove.mutate(c.name)} onHover={setHovered} onPin={setPinned} />
                 ))}
               </div>
             ))}
@@ -193,7 +193,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
               <h3 className="text-sm font-semibold mb-2">Sugestões pro {deck?.commander}</h3>
               <div className="flex flex-wrap gap-1.5">
                 {suggestions.data.slice(0, 18).map((c) => (
-                  <button key={c.id} onClick={() => tryAdd(c)} onMouseEnter={() => setPreview(c.image)} onMouseLeave={() => setPreview(null)}
+                  <button key={c.id} onClick={() => tryAdd(c)} onMouseEnter={() => setHovered(c.image)} onMouseLeave={() => setHovered(null)}
                     className="text-xs bg-surface-2 rounded px-2 py-1 hover:bg-border" title="adicionar ao deck">
                     + {c.name}
                   </button>
@@ -208,10 +208,16 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
         </div>
       </div>
 
-      {preview && (
-        <img src={preview} alt="" className="hidden md:block fixed bottom-6 right-6 w-72 rounded-xl shadow-2xl border border-border z-40 pointer-events-none" />
+      {/* preview no canto: hover = espiada; clique = fixa (com ✕ pra soltar) */}
+      {shown && (
+        <div className="hidden md:block fixed bottom-5 right-5 z-40 w-80">
+          <img src={shown} alt="" className="w-full rounded-xl shadow-2xl border border-border" />
+          {pinned && (
+            <button onClick={() => setPinned(null)}
+              className="absolute -top-2 -right-2 bg-surface border border-border rounded-full w-6 h-6 text-xs hover:text-red-400">✕</button>
+          )}
+        </div>
       )}
-      {openCard && <CardDetailModal id={openCard} onClose={() => setOpenCard(null)} />}
     </div>
   )
 }
