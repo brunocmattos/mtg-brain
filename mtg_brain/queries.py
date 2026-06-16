@@ -161,11 +161,14 @@ def _write(sql, params=None):
 
 
 def create_deck(name, commander=None):
-    return _write(
+    deck = _write(
         "INSERT INTO decks (name, commander) VALUES (%(n)s, %(c)s) "
         "RETURNING id, name, commander, created_at",
         {"n": name, "c": commander},
     )[0]
+    if commander:
+        add_card(deck["id"], commander, 1, True)  # comandante já entra no deck
+    return deck
 
 
 def list_decks():

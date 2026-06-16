@@ -37,9 +37,72 @@ export interface Combo {
   prerequisites?: string | null
 }
 
+export interface DeckSummary {
+  id: number
+  name: string
+  commander: string | null
+  created_at: string
+  cards?: number
+}
+
+export interface DeckCardRow {
+  name: string
+  qty: number
+  is_commander: boolean
+  type_line: string | null
+  cmc: number | null
+  mana_cost: string | null
+  color_identity: string[] | null
+  usd: number | null
+  image: string | null
+}
+
+export interface Deck {
+  id: number
+  name: string
+  commander: string | null
+  created_at: string
+  cards: DeckCardRow[]
+}
+
+export interface Health {
+  value: number
+  status: string
+  alvo: string
+}
+
+export interface DeckAnalysisData {
+  total_cards: number
+  types: Record<string, number>
+  predominant_type: string | null
+  curve: Record<string, number>
+  avg_cmc: number
+  colors: Record<string, number>
+  health: { lands: Health; ramp: Health; draw: Health; interaction: Health }
+  price_usd: number
+  missing_price: string[]
+  combos_present: { id: string; card_names: string[]; results: string[] }[]
+}
+
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(`/api${path}`)
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+  return r.json() as Promise<T>
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(`/api${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!r.ok) throw new Error(`${r.status}`)
+  return r.json() as Promise<T>
+}
+
+async function del<T>(path: string): Promise<T> {
+  const r = await fetch(`/api${path}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error(`${r.status}`)
   return r.json() as Promise<T>
 }
 
@@ -86,4 +149,16 @@ export const api = {
     if (!r.ok) throw new Error(`${r.status}`)
     return r.json() as Promise<{ answer: string }>
   },
+
+  listDecks: () => get<DeckSummary[]>('/decks'),
+  createDeck: (name: string, commander: string | null) =>
+    post<DeckSummary>('/decks', { name, commander }),
+  getDeck: (id: number) => get<Deck>(`/decks/${id}`),
+  addCard: (id: number, card_name: string, is_commander = false) =>
+    post<{ ok: boolean }>(`/decks/${id}/cards`, { card_name, qty: 1, is_commander }),
+  removeCard: (id: number, name: string) =>
+    del<{ ok: boolean }>(`/decks/${id}/cards?name=${encodeURIComponent(name)}`),
+  deckAnalysis: (id: number) => get<DeckAnalysisData>(`/decks/${id}/analysis`),
+  suggest: (commander: string) =>
+    get<CardSummary[]>(`/commanders/suggest?commander=${encodeURIComponent(commander)}&limit=30`),
 }
