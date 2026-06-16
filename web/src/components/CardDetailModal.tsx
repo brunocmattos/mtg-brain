@@ -1,6 +1,55 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
+import type { Combo } from '../api'
 import CardImage from './CardImage'
+
+function ComboItem({ combo }: { combo: Combo }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <li className="bg-surface-2 rounded">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full text-left p-2 text-xs flex items-start gap-2 hover:bg-border/40"
+      >
+        <span className="text-muted mt-0.5">{open ? '▾' : '▸'}</span>
+        <span className="min-w-0">
+          <span className="text-text">{combo.card_names.join(' + ')}</span>
+          <span className="text-muted"> · {combo.results.length} resultado(s)</span>
+        </span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 pt-2 text-xs space-y-2 border-t border-border">
+          <div>
+            <span className="text-accent">Cartas:</span> {combo.card_names.join(', ')}
+          </div>
+          {combo.prerequisites && (
+            <div>
+              <span className="text-accent">Pré-requisitos:</span> {combo.prerequisites}
+            </div>
+          )}
+          {combo.steps && (
+            <div>
+              <span className="text-accent">Passos:</span>{' '}
+              <span className="whitespace-pre-wrap">{combo.steps}</span>
+            </div>
+          )}
+          <div>
+            <span className="text-accent">Produz:</span> {combo.results.join(', ')}
+          </div>
+          <a
+            href={`https://commanderspellbook.com/combo/${combo.id}/`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary hover:underline inline-block"
+          >
+            Ver no Commander Spellbook ↗
+          </a>
+        </div>
+      )}
+    </li>
+  )
+}
 
 export default function CardDetailModal({
   id,
@@ -51,17 +100,17 @@ export default function CardDetailModal({
               <p className="text-sm mt-3 whitespace-pre-wrap">{card.oracle_text}</p>
 
               <h3 className="text-accent text-sm font-semibold mt-4 mb-1">
-                Combos ({combos?.length ?? 0})
+                Combos ({combos?.length ?? 0}) {combos && combos.length > 0 && (
+                  <span className="text-muted font-normal">— clique pra abrir</span>
+                )}
               </h3>
               <ul className="space-y-1.5">
-                {combos?.slice(0, 12).map((cb) => (
-                  <li key={cb.id} className="text-xs bg-surface-2 rounded p-2">
-                    <span className="text-text">{cb.card_names.join(' + ')}</span>
-                    <span className="text-muted"> → {cb.results.slice(0, 4).join(', ')}</span>
-                  </li>
-                ))}
+                {combos?.map((cb) => <ComboItem key={cb.id} combo={cb} />)}
                 {combos && combos.length === 0 && (
-                  <li className="text-xs text-muted">Sem combos catalogados pra esta carta.</li>
+                  <li className="text-xs text-muted">
+                    Sem combos catalogados pra esta carta no Commander Spellbook (normal — nem toda
+                    carta é peça de combo).
+                  </li>
                 )}
               </ul>
             </div>

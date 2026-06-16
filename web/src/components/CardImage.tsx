@@ -1,7 +1,8 @@
 import { useState } from 'react'
 
 // Cartas dupla-face têm image NULL no topo; o backend já cai pro card_faces.
-// Aqui tratamos imagem ausente / erro de carregamento com um placeholder.
+// A imagem é exibida no aspecto NATURAL (h-auto) — nada de forçar aspect-ratio,
+// que era o que esticava/distorcia. O placeholder mantém o formato de carta.
 export default function CardImage({
   src,
   alt,
@@ -28,8 +29,7 @@ export default function CardImage({
       alt={alt}
       loading="lazy"
       onError={() => setErr(true)}
-      className={className}
-      style={{ aspectRatio: '0.716' }}
+      className={`block h-auto ${className ?? ''}`}
     />
   )
 }
