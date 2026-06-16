@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:17
+    container_name: mtg-brain-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mtg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mtg}
+      POSTGRES_DB: ${POSTGRES_DB:-mtg}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - mtg_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mtg} -d ${POSTGRES_DB:-mtg}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  mtg_pgdata:

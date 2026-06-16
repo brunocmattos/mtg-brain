@@ -1,0 +1,6 @@
+psycopg[binary]>=3.2
+requests>=2.32
+ijson>=3.3
+python-dotenv>=1.0
+tqdm>=4.66
+openai>=1.0
