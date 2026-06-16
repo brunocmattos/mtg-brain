@@ -71,6 +71,14 @@ export interface Health {
   alvo: string
 }
 
+export interface DeckCombo {
+  id: string
+  card_names: string[]
+  results: string[]
+  steps: string | null
+  prerequisites: string | null
+}
+
 export interface DeckAnalysisData {
   total_cards: number
   types: Record<string, number>
@@ -78,10 +86,14 @@ export interface DeckAnalysisData {
   curve: Record<string, number>
   avg_cmc: number
   colors: Record<string, number>
+  identity: string[]
+  completeness: { total: number; complete: boolean; has_commander: boolean; off_color: string[] }
+  bracket: { level: number; name: string; reason: string }
+  game_changers: string[]
   health: { lands: Health; ramp: Health; draw: Health; interaction: Health }
   price_usd: number
   missing_price: string[]
-  combos_present: { id: string; card_names: string[]; results: string[] }[]
+  combos_present: DeckCombo[]
 }
 
 async function get<T>(path: string): Promise<T> {

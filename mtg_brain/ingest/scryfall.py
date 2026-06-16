@@ -177,3 +177,42 @@ def ingest_catalogs():
         rows.extend({"name": name, "category": category} for name in data.get("data", []))
     with db.connect() as conn:
         return db.upsert_batch(conn, KEYWORD_UPSERT, rows)
+
+
+# --------------------------------------------------------------------------- prices
+
+def ingest_prices():
+    """Backfill de preços: o bulk 'oracle_cards' tem 1 impressão por carta e às vezes
+    ela vem sem usd. Aqui pegamos o MENOR usd de QUALQUER impressão (bulk default_cards)
+    e preenchemos cards.prices->>'usd' onde está faltando."""
+    uri = _bulk_uri("default_cards")
+    dest = os.path.join(config.DATA_DIR, "default_cards.json")
+    http.download(uri, dest)
+    best = {}
+    with open(dest, "rb") as f:
+        for c in ijson.items(f, "item", use_float=True):
+            name = c.get("name")
+            usd = (c.get("prices") or {}).get("usd") if name else None
+            if usd is None:
+                continue
+            usd = float(usd)
+            if name not in best or usd < best[name]:
+                best[name] = usd
+    with db.connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name FROM cards WHERE (prices->>'usd') IS NULL")
+            missing = cur.fetchall()
+        filled = 0
+        with conn.cursor() as cur:
+            for cid, name in missing:
+                price = best.get(name)
+                if price is None:
+                    continue
+                cur.execute(
+                    "UPDATE cards SET prices = jsonb_set(COALESCE(prices, '{}'::jsonb), "
+                    "'{usd}', to_jsonb(%(u)s::text)) WHERE id = %(id)s",
+                    {"u": str(price), "id": cid})
+                filled += 1
+        conn.commit()
+    print(f"    faltando usd: {len(missing)} | preenchidos: {filled}")
+    return filled

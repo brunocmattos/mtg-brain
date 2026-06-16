@@ -265,8 +265,9 @@ def combos_in_deck(names, limit=60):
     if not names:
         return []
     return _rows("""
-        SELECT id, card_names, results FROM combos
+        SELECT id, card_names, results, steps, prerequisites FROM combos
         WHERE card_names <@ %(names)s::text[] AND array_length(card_names, 1) >= 2
+        ORDER BY array_length(card_names, 1)
         LIMIT %(limit)s
     """, {"names": sorted(set(names)), "limit": limit})
 
@@ -277,6 +278,35 @@ def _flag(value, low, high=None):
     if high is not None and value > high:
         return "alto"
     return "ok"
+
+
+# Subconjunto da lista oficial "Game Changers" da WotC (Commander Brackets).
+# Aproximado — usado só como sinal pra estimar o bracket.
+GAME_CHANGERS = {
+    "Mana Crypt", "Mana Vault", "Jeweled Lotus", "Chrome Mox", "Mox Diamond",
+    "Grim Monolith", "Lion's Eye Diamond", "Ancient Tomb", "Gaea's Cradle",
+    "The Tabernacle at Pendrell Vale", "Mishra's Workshop", "Glacial Chasm",
+    "Demonic Tutor", "Vampiric Tutor", "Imperial Seal", "Grim Tutor",
+    "Enlightened Tutor", "Mystical Tutor", "Tainted Pact", "Demonic Consultation",
+    "Thassa's Oracle", "Underworld Breach", "Necropotence", "Ad Nauseam",
+    "Bolas's Citadel", "Cyclonic Rift", "Rhystic Study", "Mystic Remora",
+    "Smothering Tithe", "Esper Sentinel", "Trouble in Pairs", "Aura Shards",
+    "Opposition Agent", "Drannith Magistrate", "Notion Thief", "Consecrated Sphinx",
+    "Fierce Guardianship", "Deflecting Swat", "Gifts Ungiven", "Intuition",
+    "Expropriate", "Field of the Dead", "Grand Arbiter Augustin IV",
+}
+
+
+def _deck_bracket(gc_count, two_card_combos, total_combos):
+    """Estimativa de bracket (1-5 da WotC). Heurística, não veredito oficial."""
+    if two_card_combos >= 1 or gc_count >= 4:
+        return {"level": 4, "name": "Optimized (alto poder)",
+                "reason": f"{two_card_combos} combo(s) infinito(s) de 2 cartas e {gc_count} game changers"}
+    if gc_count >= 1 or total_combos >= 1:
+        return {"level": 3, "name": "Upgraded",
+                "reason": f"{gc_count} game changers e {total_combos} combo(s) presente(s)"}
+    return {"level": 2, "name": "Core",
+            "reason": "sem game changers nem combos detectados"}
 
 
 def deck_analysis(deck_id):
@@ -315,6 +345,18 @@ def deck_analysis(deck_id):
             missing_price.append(r["name"])
         pool.append(r["name"])
     predominant = max((t for t in types if t != "land"), key=lambda k: types[k], default=None)
+    combos_present = combos_in_deck(pool)
+
+    cmd = next((r for r in cards if r["is_commander"]), None)
+    identity = (
+        sorted(cmd["color_identity"]) if (cmd and cmd["color_identity"])
+        else sorted({c for r in cards for c in (r["color_identity"] or [])})
+    )
+    idset = set(identity)
+    off_color = sorted({r["name"] for r in cards if set(r["color_identity"] or []) - idset})
+    gc = sorted({r["name"] for r in cards if r["name"] in GAME_CHANGERS})
+    two_card = sum(1 for c in combos_present if len(c["card_names"]) == 2)
+
     return {
         "total_cards": total,
         "types": types,
@@ -322,6 +364,15 @@ def deck_analysis(deck_id):
         "curve": curve,
         "avg_cmc": round(cmc_sum / cmc_n, 2) if cmc_n else 0,
         "colors": colors,
+        "identity": identity,
+        "completeness": {
+            "total": total,
+            "complete": total == 100,
+            "has_commander": cmd is not None,
+            "off_color": off_color,
+        },
+        "bracket": _deck_bracket(len(gc), two_card, len(combos_present)),
+        "game_changers": gc,
         # Limiares são guias de Commander (heurística), não regra absoluta.
         "health": {
             "lands": {"value": lands, "status": _flag(lands, 35, 41), "alvo": "36-38"},
@@ -331,7 +382,7 @@ def deck_analysis(deck_id):
         },
         "price_usd": round(price, 2),
         "missing_price": missing_price,
-        "combos_present": combos_in_deck(pool),
+        "combos_present": combos_present,
     }
 
 

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
-import type { CardSummary } from '../api'
+import type { CardSummary, DeckCardRow } from '../api'
 import DeckAnalysis from '../components/DeckAnalysis'
 
 export default function DecksPage() {
@@ -72,6 +72,33 @@ function DeckList({ onOpen }: { onOpen: (id: number) => void }) {
   )
 }
 
+function CardLine({ c, onRemove }: { c: DeckCardRow; onRemove: () => void }) {
+  return (
+    <div className="group relative flex items-center justify-between bg-surface rounded px-3 py-1.5 text-sm border border-border">
+      <span className={c.is_commander ? 'text-accent' : ''}>
+        {c.is_commander ? '★ ' : ''}
+        {c.name}
+        {c.qty > 1 ? ` ×${c.qty}` : ''}
+      </span>
+      <span className="flex items-center gap-3 text-xs text-muted">
+        <span>{c.usd != null ? `$${c.usd.toFixed(2)}` : '—'}</span>
+        <button onClick={onRemove} className="hover:text-red-400">
+          remover
+        </button>
+      </span>
+      {c.image && (
+        <div className="hidden group-hover:block absolute left-full top-0 ml-2 z-30 pointer-events-none">
+          <img
+            src={c.image}
+            alt={c.name}
+            className="w-56 rounded-lg shadow-2xl border border-border"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
   const qc = useQueryClient()
   const { data: deck } = useQuery({ queryKey: ['deck', id], queryFn: () => api.getDeck(id) })
@@ -96,8 +123,20 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
     qc.invalidateQueries({ queryKey: ['deck', id] })
     qc.invalidateQueries({ queryKey: ['deck-analysis', id] })
   }
-  const add = useMutation({ mutationFn: (c: CardSummary) => api.addCard(id, c.name), onSuccess: refresh })
+  const clearSearch = () => {
+    setQ('')
+    setSubmitted('')
+  }
+  const add = useMutation({
+    mutationFn: (c: CardSummary) => api.addCard(id, c.name),
+    onSuccess: () => {
+      refresh()
+      clearSearch()
+    },
+  })
   const remove = useMutation({ mutationFn: (name: string) => api.removeCard(id, name), onSuccess: refresh })
+
+  const showResults = submitted.length > 0 && (search.data?.length ?? 0) > 0
 
   return (
     <div>
@@ -108,7 +147,8 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
         <div className="lg:flex-1 min-w-0">
           <h1 className="text-xl font-semibold">{deck?.name}</h1>
           <p className="text-muted text-sm mb-3">
-            {deck?.commander ?? 'sem comandante'} · {deck?.cards.length ?? 0} cartas
+            {deck?.commander ?? 'sem comandante'} · {analysis?.total_cards ?? deck?.cards.length ?? 0} cartas
+            {deck ? ` (${deck.cards.length} únicas)` : ''}
           </p>
 
           <form
@@ -125,18 +165,29 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
               className="flex-1 bg-surface border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-primary"
             />
             <button className="bg-primary text-white rounded-md px-3 py-2 text-sm">Buscar</button>
+            {submitted && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="text-muted text-sm px-2 hover:text-text"
+              >
+                ✕
+              </button>
+            )}
           </form>
 
-          {search.data && search.data.length > 0 && (
+          {showResults && (
             <div className="mb-4 max-h-44 overflow-y-auto bg-surface border border-border rounded-md divide-y divide-border">
-              {search.data.slice(0, 15).map((c) => (
+              {search.data!.slice(0, 15).map((c) => (
                 <button
                   key={c.id}
                   onClick={() => add.mutate(c)}
                   className="w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 flex justify-between"
                 >
                   <span>{c.name}</span>
-                  <span className="text-muted text-xs">{c.usd != null ? `$${c.usd.toFixed(2)} · ` : ''}+ add</span>
+                  <span className="text-muted text-xs">
+                    {c.usd != null ? `$${c.usd.toFixed(2)} · ` : ''}+ add
+                  </span>
                 </button>
               ))}
             </div>
@@ -144,21 +195,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
 
           <div className="space-y-1">
             {deck?.cards.map((c) => (
-              <div
-                key={c.name}
-                className="flex items-center justify-between bg-surface rounded px-3 py-1.5 text-sm border border-border"
-              >
-                <span className={c.is_commander ? 'text-accent' : ''}>
-                  {c.is_commander ? '★ ' : ''}
-                  {c.name}
-                </span>
-                <span className="flex items-center gap-3 text-xs text-muted">
-                  <span>{c.usd != null ? `$${c.usd.toFixed(2)}` : '—'}</span>
-                  <button onClick={() => remove.mutate(c.name)} className="hover:text-red-400">
-                    remover
-                  </button>
-                </span>
-              </div>
+              <CardLine key={c.name} c={c} onRemove={() => remove.mutate(c.name)} />
             ))}
             {deck && deck.cards.length === 0 && (
               <p className="text-muted text-sm">Deck vazio — busque cartas acima pra adicionar.</p>

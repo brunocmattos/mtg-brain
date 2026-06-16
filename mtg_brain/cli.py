@@ -19,6 +19,7 @@ INGESTORS = {
     "rulings": scryfall.ingest_rulings,
     "rules": rules.ingest_rules,
     "combos": combos.ingest_combos,
+    "prices": scryfall.ingest_prices,
 }
 # Ordem segura: sets/catalogs/cards/rulings antes de combos (mais pesado).
 ORDER = ["sets", "catalogs", "cards", "rulings", "rules", "combos"]
