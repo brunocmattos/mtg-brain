@@ -98,7 +98,7 @@ def list_commanders(q=None, colors=None, max_price=None, sort="edhrec", limit=40
 
 
 def recommend_commanders(theme, colors=None, max_price=None, limit=12):
-    where = ["(type_line ILIKE %(t)s OR oracle_text ILIKE %(t)s)"]
+    where = ["(name ILIKE %(t)s OR type_line ILIKE %(t)s OR oracle_text ILIKE %(t)s)"]
     params = {"t": f"%{theme}%", "limit": min(int(limit or 12), 50)}
     if colors:
         where.append("color_identity <@ %(colors)s")
