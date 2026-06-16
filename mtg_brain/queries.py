@@ -297,16 +297,54 @@ GAME_CHANGERS = {
 }
 
 
-def _deck_bracket(gc_count, two_card_combos, total_combos):
-    """Estimativa de bracket (1-5 da WotC). Heurística, não veredito oficial."""
-    if two_card_combos >= 1 or gc_count >= 4:
+MASS_LAND_DENIAL = {
+    "Armageddon", "Ravages of War", "Catastrophe", "Jokulhaups", "Obliterate",
+    "Decree of Annihilation", "Wildfire", "Burning of Xinye", "Impending Disaster",
+    "Boom // Bust", "Sundering Titan",
+}
+
+
+def _is_mld(name, text):
+    return name in MASS_LAND_DENIAL or "destroy all lands" in (text or "").lower()
+
+
+def _is_extra_turn(text):
+    return "extra turn" in (text or "").lower()
+
+
+def _is_win_combo(combo):
+    """Combo de 2 cartas que loopa/ganha — o que joga o deck pro bracket 4+."""
+    if len(combo["card_names"]) != 2:
+        return False
+    txt = " ".join(combo.get("results") or []).lower()
+    return "infinite" in txt or "loses the game" in txt or "wins the game" in txt
+
+
+def _deck_bracket(gc, two_card_win, mld, extra_turns, total_combos):
+    """Estimativa de bracket WotC seguindo as RESTRIÇÕES oficiais (não é veredito oficial).
+    Combo infinito de 2 cartas, >3 game changers, destruição em massa de terra ou turnos
+    extras são proibidos nos brackets 1-3 — então jogam o deck pro 4 (Optimized)."""
+    blockers = []
+    if two_card_win:
+        blockers.append("combo infinito de 2 cartas")
+    if mld:
+        blockers.append("destruição em massa de terrenos")
+    if extra_turns:
+        blockers.append("turnos extras")
+    if len(gc) > 3:
+        blockers.append(f"{len(gc)} game changers (>3)")
+    if blockers:
         return {"level": 4, "name": "Optimized (alto poder)",
-                "reason": f"{two_card_combos} combo(s) infinito(s) de 2 cartas e {gc_count} game changers"}
-    if gc_count >= 1 or total_combos >= 1:
-        return {"level": 3, "name": "Upgraded",
-                "reason": f"{gc_count} game changers e {total_combos} combo(s) presente(s)"}
+                "reason": "proibido nos brackets 1-3: " + ", ".join(blockers)}
+    if gc or total_combos:
+        det = []
+        if gc:
+            det.append(f"{len(gc)} game changer(s) (bracket 3 permite até 3)")
+        if total_combos:
+            det.append(f"{total_combos} combo(s) tardio(s)")
+        return {"level": 3, "name": "Upgraded", "reason": "; ".join(det)}
     return {"level": 2, "name": "Core",
-            "reason": "sem game changers nem combos detectados"}
+            "reason": "sem game changers, combos, MLD ou turnos extras"}
 
 
 def deck_analysis(deck_id):
@@ -355,7 +393,9 @@ def deck_analysis(deck_id):
     idset = set(identity)
     off_color = sorted({r["name"] for r in cards if set(r["color_identity"] or []) - idset})
     gc = sorted({r["name"] for r in cards if r["name"] in GAME_CHANGERS})
-    two_card = sum(1 for c in combos_present if len(c["card_names"]) == 2)
+    mld = any(_is_mld(r["name"], r["oracle_text"]) for r in cards)
+    extra_turns = any(_is_extra_turn(r["oracle_text"]) for r in cards)
+    two_card_win = any(_is_win_combo(c) for c in combos_present)
 
     return {
         "total_cards": total,
@@ -371,7 +411,7 @@ def deck_analysis(deck_id):
             "has_commander": cmd is not None,
             "off_color": off_color,
         },
-        "bracket": _deck_bracket(len(gc), two_card, len(combos_present)),
+        "bracket": _deck_bracket(gc, two_card_win, mld, extra_turns, len(combos_present)),
         "game_changers": gc,
         # Limiares são guias de Commander (heurística), não regra absoluta.
         "health": {
