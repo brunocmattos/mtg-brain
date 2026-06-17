@@ -7,9 +7,9 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
 | | |
 |---|---|
 | **Stack** | Python · FastAPI · PostgreSQL 17 · React + TypeScript · Vite · Tailwind |
-| **Fontes** | Scryfall · Commander Spellbook · Comprehensive Rules (WotC) |
+| **Fontes** | Scryfall · Commander Spellbook · Comprehensive Rules (WotC) · ManaPool (preços) |
 | **Dados** | ~38 mil cartas · ~92 mil combos · regras oficiais · símbolos de mana oficiais |
-| **Custo** | US$ 0 — só Postgres em Docker |
+| **Custo** | US$ 0 — banco + API em Docker (`docker compose up -d` sobe tudo) |
 
 ---
 
@@ -18,8 +18,11 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
 - **Buscar comandantes** por tema (`vampire`, `sacrifice`, `mill`…), cor e preço, com a arte oficial das cartas.
 - **Pesquisar qualquer carta** por nome ou texto de regras (`destroy target creature`, `loses life`…).
 - **Montar decks** a partir de um **seletor de comandante** com filtros (cor, CMC, tema), com busca, sugestões por comandante, preview grande da carta no canto, e visualização em **lista** ou **grade de imagens** (estilo Moxfield/Archidekt).
-- **Analisar o deck**: contagem por tipo, curva de mana, identidade de cor, ramp/compra/interação/terrenos, **bracket** (sistema oficial WotC), **combos presentes**, **preço em US$/R$ + 3 fontes** (TCGplayer/Cardmarket/MTGO) e um **rank de Poder & Consistência** (heurístico, *não* é taxa de vitória) e um indicador de **pontos fracos** ("o que falta": resposta em velocidade de instante, wipes, counters, ramp, compra…).
+- **Trocar a versão/arte** de cada carta no deck (botão ⇄) — todas as impressões vêm do Scryfall sob demanda, com a arte e o preço de cada edição.
+- **Analisar o deck**: contagem por tipo, curva de mana, identidade de cor, ramp/compra/interação/terrenos, **bracket** (sistema oficial WotC), **combos presentes**, um **rank de Poder & Consistência** (heurístico, *não* é taxa de vitória) e um indicador de **pontos fracos** ("o que falta": resposta em velocidade de instante, wipes, counters, ramp, compra…).
+- **Preço do deck multi-fonte** com seletor (default **ManaPool**; também TCGplayer, Cardmarket, MTGO) e total em **US$ e R$** com bandeiras.
 - **Importar decklist** (colar do Moxfield/Archidekt) e **exportar** em `.txt` (`<qtd> <nome>`, comandante no topo) — importável no Tabletop Simulator, Moxfield e Archidekt.
+- **Criar deck com I.A.** via a skill **`/deck-creator`** no Claude Code: você dá comandante + bracket + orçamento, ela te questiona o necessário, monta o deck e importa no app pra você avaliar.
 - **Perguntar em linguagem natural** via o **MCP** conectado ao Claude Code (sem LLM local) — ver abaixo.
 
 ### Telas
@@ -42,6 +45,7 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
   Scryfall (bulk, API)   │  mtg_brain/ingest/  — idempotente,        │
   Commander Spellbook    │  resiliente a rate-limit, streaming ijson │
   Comprehensive Rules    └───────────────────────┬──────────────────┘
+  ManaPool (preços)                              │
                                                   ▼
                                    ┌──────────────────────────────┐
                                    │   PostgreSQL 17 (Docker)      │
@@ -73,6 +77,8 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
 - **RAG por *tool use*, não por embeddings.** O LLM ganha uma única ferramenta — rodar `SELECT` no Postgres — em vez de busca vetorial. Para dados estruturados (preço, cor, legalidade, combos), SQL é mais preciso e auditável. `pgvector` fica para busca semântica de texto de regra no futuro.
 - **Guard-rails no SQL do LLM:** só `SELECT`/`WITH`, conexão `read_only`, `statement_timeout` de 15s. O modelo não consegue escrever no banco.
 - **Tudo na mesma origem em produção:** a FastAPI serve o `web/dist`, com *fallback* de SPA — as rotas client-side (`/commanders`, `/decks`…) devolvem `index.html`.
+- **Preço multi-fonte com default ManaPool:** o dump da ManaPool é ingerido pra tabela `manapool_prices` (evita 50 MB/req); a análise soma por fonte (ManaPool/TCGplayer/Cardmarket/MTGO) e o front deixa trocar a fonte exibida (salva no navegador), com total em USD/BRL.
+- **Versão/arte por carta sob demanda:** só uma impressão representativa fica no banco; as outras edições vêm do Scryfall na hora (`/cards/search?unique=prints`) e a escolha grava em `deck_cards.printing` (jsonb), sem inchar a ingestão.
 - **Símbolos de mana oficiais:** baixados do endpoint `/symbology` do Scryfall (SVG oficial), não recriados à mão.
 
 Detalhe completo da arquitetura em **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
@@ -98,7 +104,7 @@ pip install -r requirements.txt
 # 4. cria as tabelas e ingere os dados (cards + combos baixam ~centenas de MB)
 python -m mtg_brain init-db
 python -m mtg_brain ingest all
-python -m mtg_brain ingest prices symbols   # preços (default-cards) e símbolos oficiais
+python -m mtg_brain ingest prices manapool symbols   # preços Scryfall + ManaPool + símbolos oficiais
 
 # 5. confere
 python -m mtg_brain stats
@@ -137,7 +143,7 @@ Depois é só perguntar no Claude Code; ele consulta o banco (read-only) e respo
 | Comando | O que faz |
 |---|---|
 | `python -m mtg_brain init-db` | cria/atualiza o schema |
-| `python -m mtg_brain ingest <alvos…>` | `sets`, `catalogs`, `cards`, `rulings`, `rules`, `combos`, `prices`, `symbols` ou `all` |
+| `python -m mtg_brain ingest <alvos…>` | `sets`, `catalogs`, `cards`, `rulings`, `rules`, `combos`, `prices`, `manapool`, `symbols` ou `all` |
 | `python -m mtg_brain stats` | conta registros por tabela |
 
 A ingestão é **idempotente** (tudo é upsert) e **resumível** (combos retomam do offset em caso de rate-limit), então pode rodar de novo pra atualizar.
@@ -158,10 +164,12 @@ Tudo sob `/api`. Veja a doc interativa em `http://localhost:8000/docs` (Swagger,
 | `GET /api/commanders` · `…/recommend` · `…/suggest` | lista / recomenda por tema / sugere cartas |
 | `GET /api/combos?card=` · `?identity=` | combos por carta ou por identidade |
 | `GET /api/fx/usd-brl` | cotação USD→BRL (cache, com fallback) |
+| `GET /api/printings?card=` | todas as impressões/artes de uma carta (Scryfall, sob demanda) |
 | `POST /api/decks/import` | importa decklist colada `{ name, text, commander? }` |
 | `POST /api/decks` · `GET /api/decks` · `GET /api/decks/{id}` · `DELETE /api/decks/{id}` | CRUD de decks |
 | `POST /api/decks/{id}/cards` · `DELETE …?name=` | adiciona / remove carta |
-| `GET /api/decks/{id}/analysis` | análise completa do deck |
+| `POST /api/decks/{id}/cards/printing` | troca a versão/arte de uma carta no deck |
+| `GET /api/decks/{id}/analysis` | análise completa do deck (bracket, rank, preço multi-fonte, o que falta) |
 
 ---
 
@@ -169,7 +177,9 @@ Tudo sob `/api`. Veja a doc interativa em `http://localhost:8000/docs` (Swagger,
 
 Um protótipo de gerador **determinístico** foi construído e medido — e descartado de propósito. Ele montava 100 cartas legais, na identidade de cor, com manabase/cotas razoáveis, dentro de bracket e orçamento. Mas, avaliado com honestidade, ele escolhia por **popularidade (rank EDHREC)** e **nunca lia o texto do comandante**: não modelava o plano de jogo, não montava uma linha de combo coerente e não pontuava sinergia entre as cartas. Ou seja, entregava um *“goodstuff”* legal, não um deck **afinado**.
 
-Construir um deck realmente bom exige **julgamento** — entender o motor do comandante, definir a vitória, escolher peças que conversam com o plano. Isso é trabalho de **I.A./LLM**, não de uma fórmula. Por isso a geração e a otimização de deck são deliberadamente delegadas ao **cérebro** (chat / Claude Code via MCP), e o app foca no que faz bem de forma **determinística e auditável**: dados, busca, construção manual e análise. O racional completo está em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#geração-de-deck-decisão-de-arquitetura).
+Construir um deck realmente bom exige **julgamento** — entender o motor do comandante, definir a vitória, escolher peças que conversam com o plano. Isso é trabalho de **I.A./LLM**, não de uma fórmula. Por isso a geração e a otimização de deck são deliberadamente delegadas ao **cérebro** (Claude Code via MCP), e o app foca no que faz bem de forma **determinística e auditável**: dados, busca, construção manual e análise. O racional completo está em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#geração-de-deck-decisão-de-arquitetura).
+
+Na prática, a geração é feita pela skill **`/deck-creator`** do Claude Code: você dá comandante + bracket + orçamento, ela te questiona o que falta, lê o comandante e consulta o banco (cartas legais na cor, combos, preços) pra montar um deck **afinado** com motor e vitória definidos, e importa direto no app via `POST /api/decks/import` pra você avaliar.
 
 ---
 
@@ -179,15 +189,18 @@ Construir um deck realmente bom exige **julgamento** — entender o motor do com
 mtg_brain/
   cli.py            # CLI (init-db / ingest / stats)
   config.py db.py http.py fx.py
-  queries.py        # SQL determinístico: busca, análise, bracket, rank, importador
-  ingest/           # scryfall.py · combos.py · rules.py
+  queries.py        # SQL determinístico: busca, análise, bracket, rank, importador, versões/artes
+  ingest/           # scryfall.py · combos.py · rules.py · manapool.py
   api/app.py        # FastAPI + serve o frontend
-db/                 # schema.sql · schema_deck.sql
+db/                 # schema.sql · schema_deck.sql (deck_cards.printing jsonb · manapool_prices)
 web/                # React + TS + Vite + Tailwind
   src/pages/        # CommandersPage · CardsPage · DecksPage
-  src/components/   # Mana · DeckAnalysis · CommanderPicker · DeckImporter · CommanderCard …
+  src/components/   # Mana · DeckAnalysis · CommanderPicker · DeckImporter · PrintingPicker · CardDetailModal …
+Dockerfile · docker-compose.yml   # sobe banco + API juntos (restart: unless-stopped)
 docs/               # ARCHITECTURE.md · img/
 ```
+
+A skill `/deck-creator` mora fora do repo, em `~/.claude/skills/deck-creator/SKILL.md`.
 
 ---
 
@@ -196,8 +209,9 @@ docs/               # ARCHITECTURE.md · img/
 - **Fase 1 — Ingestão** ✅
 - **Fase 2 — Banco consultável** ✅
 - **Fase 3 — Inteligência via MCP (Claude Code)** ✅
-- **Fase 4 — App web: deckbuilder, análise, preços, rank, importador/export** ✅
-- **Próximo:** geração/otimização de deck via Claude Code; busca semântica (pgvector); todas as impressões/artes com seletor de versão.
+- **Fase 4 — App web: deckbuilder, análise, preços multi-fonte, rank, importador/export, seletor de versão/arte** ✅
+- **Fase 5 — Geração de deck via skill `/deck-creator` (Claude Code) + tudo no Docker** ✅
+- **Próximo:** skill `deck-optimizer` (afinar deck existente); refresh agendado de preços; busca semântica (pgvector).
 
 ## Notas e atribuição
 

@@ -61,7 +61,8 @@ Cartas dupla-face têm `image_uris` nulo no topo; o helper `_img()` faz *fallbac
 - **Idempotente** — tudo é `INSERT … ON CONFLICT DO UPDATE`. Rodar de novo = atualizar.
 - **Streaming** — o bulk de cartas (centenas de MB) é lido com `ijson` (`use_float=True`) sem carregar tudo na memória.
 - **Resiliente a rate-limit** — `combos` (Commander Spellbook, paginado) retoma do offset `floor(count/100)*100`, com *backoff* crescente e captura de quedas de conexão. Resultado típico: ~92 mil combos.
-- **Preços em duas etapas** — `cards` vem do bulk *oracle-cards* (1 impressão por carta); `ingest prices` depois preenche `usd` nulos a partir do bulk *default-cards*.
+- **Preços em duas etapas** — `cards` vem do bulk *oracle-cards* (1 impressão por carta); `ingest prices` depois preenche `usd`/`eur`/`tix` nulos a partir do bulk *default-cards*.
+- **ManaPool** — `ingest manapool` baixa o dump público da ManaPool (`/api/v1/prices/singles`, ~100k impressões), reduz ao menor preço NM por nome de carta e faz `TRUNCATE` + `COPY` na tabela `manapool_prices`. Os amigos do Bruno definem o teto de orçamento pelo preço ManaPool, por isso é a **fonte default** da análise.
 - **Símbolos oficiais** — `/symbology` → `card_symbols`. O frontend renderiza os SVGs oficiais, sem recriar símbolos.
 
 ---
@@ -85,8 +86,14 @@ Calcula, só com heurísticas sobre o texto da carta:
 - **saúde**: terrenos, ramp (`add {…}`, *search … land*), compra (regex `draws? \w+ cards?`), interação (destroy/exile/counter/return);
 - **completude**: 100 cartas? tem comandante? cartas fora da identidade?
 - **bracket** (ver abaixo);
-- **preço** (básicos contam como grátis — a tabela é oracle-cards e o Swamp vem marcado ~US$2, o que inflaria tudo);
+- **preço multi-fonte** (ManaPool/TCGplayer/Cardmarket/MTGO somados por carta; básicos contam como grátis — a tabela é oracle-cards e o Swamp vem marcado ~US$2, o que inflaria tudo; o front escolhe a fonte e converte USD→BRL via `/api/fx/usd-brl`);
+- **rank de Poder & Consistência** (heurístico, 0–100 sobre eixos consistência/interação/ameaça — *não* é taxa de vitória; sem log público de partidas, win-rate real é impossível, e isso é dito explicitamente na UI);
+- **o que falta** (`_deck_gaps`): aponta lacunas com severidade (alto/médio/baixo) — ex.: pouca interação em **velocidade de instante**, sem wipes, sem counters, ramp/compra abaixo do saudável;
 - **combos presentes**: `card_names <@ deck_names` via índice GIN.
+
+### Versão/arte por carta
+
+Só uma impressão representativa por carta fica no banco (bulk oracle-cards). Quando o usuário quer outra arte/edição, `card_printings(name)` busca as impressões no **Scryfall sob demanda** (`/cards/search?q=!"NAME"&unique=prints`, com cache em memória) e `set_printing` grava a escolha em `deck_cards.printing` (jsonb). A análise e a exibição passam a usar essa impressão (imagem, art_crop e preço) via `COALESCE`. Assim o seletor de versão funciona sem ingerir ~500k impressões no banco.
 
 ### Bracket (sistema oficial WotC, beta)
 
@@ -132,6 +139,8 @@ Conclusão: produzia um *“goodstuff”* legal, **não** um deck afinado em tor
 
 Por isso o gerador determinístico foi **removido**, e a geração/otimização de deck é delegada ao **Claude Code** (via MCP, com acesso read-only ao banco), que lê o deck atual, entende o plano e completa/otimiza. O app web foca no que faz bem de forma **determinística e auditável**: dados, busca, **seletor de comandante**, construção manual, análise e importação/exportação.
 
+Na prática isso é uma **skill** do Claude Code: `/deck-creator` (em `~/.claude/skills/deck-creator/SKILL.md`). O fluxo: questiona o usuário sobre comandante, bracket e orçamento → lê o texto do comandante e consulta o banco via MCP (cartas legais na cor, combos, preços ManaPool) → monta ~100 cartas com motor + vitória definidos, dentro do bracket/orçamento → importa no app via `POST /api/decks/import` → o usuário avalia o deck pronto na plataforma. A skill é instruída a ser honesta sobre tradeoffs (o que cortou, onde o orçamento apertou).
+
 > Lição de engenharia: vale construir o baseline determinístico, **medir com honestidade** e então decidir a fronteira entre o que é fórmula e o que é I.A. — em vez de fingir que uma fórmula “gera decks bons”.
 
 ---
@@ -143,6 +152,10 @@ Por isso o gerador determinístico foi **removido**, e a geração/otimização 
 - **TanStack Query** para data fetching/cache; **react-router** para as 3 telas (Comandantes, Cartas, Decks).
 - **Símbolos de mana** (`components/Mana.tsx`): busca `/api/symbols` (cache infinito) e tokeniza `{...}` no texto/custo, trocando por `<img>` do SVG oficial.
 
+### Docker sobe tudo
+
+O `docker-compose.yml` tem dois serviços: `db` (Postgres 17, volume nomeado `mtg_pgdata`) e `app` (build do `Dockerfile`: Python 3.12-slim + `mtg_brain/` + `web/dist`, rodando uvicorn na 8000). Ambos com `restart: unless-stopped`, então o app **religa sozinho no boot do PC** — não precisa subir uvicorn na mão. `docker compose up -d` sobe os dois; mudou código, `--build` reconstrói a imagem do `app`. (Antes a API era um uvicorn no host, o que causava "container rodando mas não acessa" — o container era só o banco.) Persistência mora no volume `mtg_pgdata`; desligar o PC abruptamente pode perder o último flush do WSL2, então decks recém-criados podem sumir num crash — mitigação é shutdown limpo.
+
 ---
 
 ## Decisões e trade-offs
@@ -151,6 +164,9 @@ Por isso o gerador determinístico foi **removido**, e a geração/otimização 
 |---|---|---|
 | JSON Scryfall inteiro no `cards` | nunca perder atributo; consultar depois | tabela maior |
 | Linguagem natural via MCP + Claude Code (não LLM embutido) | qualidade real, US$ 0, sem GPU; SQL preciso/auditável | precisa do Claude Code conectado; sem chat dentro do app |
-| Geração/otimização de deck via Claude Code | qualidade real: plano de jogo + sinergia | fora do app determinístico |
+| Geração de deck via skill `/deck-creator` (Claude Code) | qualidade real: plano de jogo + sinergia | fora do app determinístico; precisa do Claude Code |
+| ManaPool como fonte default de preço | é o preço que os amigos usam de teto | mais uma ingestão (`ingest manapool`) pra manter atualizada |
+| Versões/artes via Scryfall sob demanda | seletor de versão sem ingerir ~500k impressões | depende do Scryfall online na hora de trocar a arte |
+| Docker sobe banco + API (`restart: unless-stopped`) | religa sozinho, sem chamar ninguém | rebuild da imagem a cada mudança de código |
 | Mesma origem (API serve o SPA) | deploy simples, sem CORS em prod | rebuild do front a cada release |
 | Básicos = grátis no preço | realismo (você já os tem) | preço ignora básicos premium |
