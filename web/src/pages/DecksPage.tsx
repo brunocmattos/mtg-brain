@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
-import type { CardSummary, DeckCardRow } from '../api'
+import type { CardSummary, DeckCardRow, Deck } from '../api'
 import DeckAnalysis from '../components/DeckAnalysis'
 import CommanderPicker from '../components/CommanderPicker'
 import { ManaCost } from '../components/Mana'
@@ -109,6 +109,26 @@ function bucket(c: DeckCardRow): string {
     if (t.includes(k)) return k
   }
   return 'outro'
+}
+
+// Decklist no formato "<qtd> <nome>" (comandante no topo) — lido pelos importadores
+// de MTG do Tabletop Simulator, Moxfield, Archidekt, etc.
+function deckToText(deck: Deck): string {
+  const cmd = deck.cards.filter((c) => c.is_commander)
+  const rest = deck.cards.filter((c) => !c.is_commander).sort((a, b) => a.name.localeCompare(b.name))
+  return [...cmd, ...rest].map((c) => `${c.qty} ${c.name}`).join('\n') + '\n'
+}
+
+function downloadText(filename: string, text: string) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 function CardLine({
@@ -246,15 +266,26 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <button onClick={onBack} className="text-muted text-sm hover:text-text">← decks</button>
-        {confirmDel ? (
-          <span className="flex items-center gap-2 text-xs">
-            <span className="text-muted">Excluir este deck?</span>
-            <button onClick={() => del.mutate()} className="font-medium text-red-400 hover:text-red-300">Confirmar</button>
-            <button onClick={() => setConfirmDel(false)} className="text-muted hover:text-text">cancelar</button>
-          </span>
-        ) : (
-          <button onClick={() => setConfirmDel(true)} className="text-xs text-muted hover:text-red-400">🗑 excluir deck</button>
-        )}
+        <div className="flex items-center gap-3">
+          {deck && deck.cards.length > 0 && (
+            <button
+              onClick={() => downloadText(`${(deck.name || 'deck').replace(/[/\\?%*:|"<>]/g, '').trim()}.txt`, deckToText(deck))}
+              title="baixar decklist .txt (Tabletop Simulator, Moxfield, Archidekt…)"
+              className="text-xs text-muted hover:text-accent"
+            >
+              ⬇ Exportar .txt
+            </button>
+          )}
+          {confirmDel ? (
+            <span className="flex items-center gap-2 text-xs">
+              <span className="text-muted">Excluir este deck?</span>
+              <button onClick={() => del.mutate()} className="font-medium text-red-400 hover:text-red-300">Confirmar</button>
+              <button onClick={() => setConfirmDel(false)} className="text-muted hover:text-text">cancelar</button>
+            </span>
+          ) : (
+            <button onClick={() => setConfirmDel(true)} className="text-xs text-muted hover:text-red-400">🗑 excluir deck</button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">

@@ -19,6 +19,7 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
 - **Pesquisar qualquer carta** por nome ou texto de regras (`destroy target creature`, `loses life`…).
 - **Montar decks** a partir de um **seletor de comandante** com filtros (cor, CMC, tema), com busca, sugestões por comandante, preview grande da carta no canto, e visualização em **lista** ou **grade de imagens** (estilo Moxfield/Archidekt).
 - **Analisar o deck**: contagem por tipo, curva de mana, identidade de cor, ramp/compra/interação/terrenos, **bracket** (sistema oficial WotC) e **combos presentes**.
+- **Exportar a decklist** em `.txt` (`<qtd> <nome>`, comandante no topo) — importável no Tabletop Simulator, Moxfield e Archidekt.
 - **Conversar com o cérebro** em português: o LLM consulta o banco e responde citando cartas, combos e regras.
 
 ### Telas
@@ -191,7 +192,7 @@ docs/               # ARCHITECTURE.md · img/
 - **Fase 2 — Banco consultável** ✅
 - **Fase 3 — Cérebro (RAG via tool use)** ✅
 - **Fase 4 — App web + deckbuilder + análise** ✅
-- **Próximo:** geração/otimização de deck via LLM (chat/Claude Code); preços multi-fonte (USD/EUR/MTGO) + USD/BRL; busca semântica (pgvector); todas as impressões/artes com seletor de versão; export de deck (Arena/TTS).
+- **Próximo:** geração/otimização de deck via LLM (chat/Claude Code); preços multi-fonte (USD/EUR/MTGO) + USD/BRL; busca semântica (pgvector); todas as impressões/artes com seletor de versão.
 
 ## Notas e atribuição
 
