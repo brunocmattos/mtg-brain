@@ -144,21 +144,46 @@ function ComboItem({ c }: { c: DeckCombo }) {
   )
 }
 
+const SRC = [
+  { key: 'manapool', label: 'ManaPool', cur: 'usd' },
+  { key: 'usd', label: 'TCGplayer', cur: 'usd' },
+  { key: 'eur', label: 'Cardmarket', cur: 'eur' },
+  { key: 'tix', label: 'MTGO', cur: 'tix' },
+] as const
+
 export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisData }) {
   const comp = a.completeness
   const { data: fx } = useQuery({ queryKey: ['fx-usd-brl'], queryFn: api.fx, staleTime: 6 * 3600 * 1000 })
   const rate = fx?.rate ?? 5.4
+  // fonte de preço default = ManaPool (o que a galera usa pro teto); fica salva no navegador
+  const [source, setSource] = useState<string>(() => localStorage.getItem('mtg-price-source') || 'manapool')
+  const pickSource = (s: string) => { setSource(s); localStorage.setItem('mtg-price-source', s) }
+  const sel = SRC.find((s) => s.key === source) ?? SRC[0]
+  const amount = ({ manapool: a.price_manapool, usd: a.price_usd, eur: a.price_eur, tix: a.price_tix } as Record<string, number>)[sel.key] ?? 0
+
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold">Análise</h3>
         <div className="text-right leading-tight">
-          <div className="text-accent text-lg font-semibold flex items-center justify-end gap-1.5"><UsFlag /> {usd(a.price_usd)}</div>
-          <div className="text-sm text-muted flex items-center justify-end gap-1.5"><BrFlag /> {brl(a.price_usd * rate)}</div>
+          <select value={source} onChange={(e) => pickSource(e.target.value)} title="fonte de preço"
+            className="mb-0.5 rounded border border-border bg-surface px-1 py-0.5 text-[10px] text-muted outline-none">
+            {SRC.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+          {sel.cur === 'usd' ? (
+            <>
+              <div className="flex items-center justify-end gap-1.5 text-lg font-semibold text-accent"><UsFlag /> {usd(amount)}</div>
+              <div className="flex items-center justify-end gap-1.5 text-sm text-muted"><BrFlag /> {brl(amount * rate)}</div>
+            </>
+          ) : sel.cur === 'eur' ? (
+            <div className="text-lg font-semibold text-accent">{eur(amount)}</div>
+          ) : (
+            <div className="text-lg font-semibold text-accent">{amount.toFixed(2)} tix</div>
+          )}
         </div>
       </div>
       <div className="-mt-3 text-right text-[10px] text-muted" title="preços por fonte (terrenos básicos não contam)">
-        TCGplayer {usd(a.price_usd)} · Cardmarket {eur(a.price_eur)} · MTGO {a.price_tix.toFixed(2)} tix
+        ManaPool {usd(a.price_manapool)} · TCGplayer {usd(a.price_usd)} · Cardmarket {eur(a.price_eur)} · MTGO {a.price_tix.toFixed(2)} tix
         {fx?.source === 'fallback' ? ' · câmbio aprox.' : ''}
       </div>
 

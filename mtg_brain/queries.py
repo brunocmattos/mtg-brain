@@ -417,6 +417,7 @@ def _deck_cards(deck_id):
                COALESCE((dc.printing->>'usd')::numeric, p.usd) AS usd,
                COALESCE((dc.printing->>'eur')::numeric, p.eur) AS eur,
                COALESCE((dc.printing->>'tix')::numeric, p.tix) AS tix,
+               mp.usd AS manapool,
                COALESCE(dc.printing->>'image', c.image) AS image,
                COALESCE(dc.printing->>'art_crop', c.art_crop) AS art_crop,
                dc.printing
@@ -435,6 +436,7 @@ def _deck_cards(deck_id):
                    MIN((prices->>'tix')::numeric) AS tix
             FROM cards WHERE name = dc.card_name
         ) p ON true
+        LEFT JOIN manapool_prices mp ON mp.name = dc.card_name
         WHERE dc.deck_id = %(id)s
         ORDER BY c.cmc NULLS FIRST, dc.card_name
     """, {"id": deck_id})
@@ -717,7 +719,7 @@ def deck_analysis(deck_id):
     lands = ramp = draw = interaction = tutors = 0
     wipes = counters = instant_interaction = 0
     cmc_sum = cmc_n = 0
-    price = price_eur = price_tix = 0.0
+    price = price_eur = price_tix = price_mp = 0.0
     missing_price, pool = [], []
     for r in cards:
         q = r["qty"] or 1
@@ -758,6 +760,8 @@ def deck_analysis(deck_id):
                 price_eur += float(r["eur"]) * q
             if r.get("tix") is not None:
                 price_tix += float(r["tix"]) * q
+            if r.get("manapool") is not None:
+                price_mp += float(r["manapool"]) * q
         pool.append(r["name"])
     predominant = max((t for t in types if t != "land"), key=lambda k: types[k], default=None)
     combos_present = combos_in_deck(pool)
@@ -817,6 +821,7 @@ def deck_analysis(deck_id):
         "price_usd": round(price, 2),
         "price_eur": round(price_eur, 2),
         "price_tix": round(price_tix, 2),
+        "price_manapool": round(price_mp, 2),
         "missing_price": missing_price,
         "combos_present": combos_present,
     }

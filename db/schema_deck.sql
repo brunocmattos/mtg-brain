@@ -30,3 +30,10 @@ CREATE TABLE IF NOT EXISTS card_symbols (
     symbol   text PRIMARY KEY,
     svg_uri  text NOT NULL
 );
+
+-- Preços da ManaPool (menor NM nonfoil em USD por nome) — fonte de preço default do deck.
+-- Atualiza com:  python -m mtg_brain ingest manapool
+CREATE TABLE IF NOT EXISTS manapool_prices (
+    name  text PRIMARY KEY,
+    usd   numeric
+);
