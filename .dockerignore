@@ -1,0 +1,9 @@
+.venv/
+web/node_modules/
+web/shots*/
+data/
+.git/
+*.log
+__pycache__/
+**/__pycache__/
+.env

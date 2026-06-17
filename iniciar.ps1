@@ -1,14 +1,8 @@
-# Sobe o mtg-brain: Postgres (Docker) + API (que serve o frontend) e abre o navegador.
-# Pré-requisitos (uma vez): docker e o frontend buildado (cd web; npm run build).
-$ErrorActionPreference = 'Stop'
+# Sobe o mtg-brain INTEIRO (banco + API) via Docker e abre o navegador.
+# Depois do primeiro 'up', o Docker religa tudo sozinho no boot — nem precisa rodar isto.
+# Use --build (ou rode `docker compose up -d --build`) depois de mudar o código.
 $repo = $PSScriptRoot
-Set-Location $repo
-
-Write-Host "Subindo o Postgres (Docker)..." -ForegroundColor Magenta
-docker compose up -d
-
-Write-Host "Abrindo http://localhost:8000 ..." -ForegroundColor Magenta
+Write-Host "Subindo o mtg-brain (Docker: banco + API)..." -ForegroundColor Magenta
+docker compose -f "$repo\docker-compose.yml" --project-directory "$repo" up -d
 Start-Process "http://localhost:8000"
-
-Write-Host "Iniciando a API (Ctrl+C para parar)..." -ForegroundColor Magenta
-& "$repo\.venv\Scripts\python.exe" -m uvicorn mtg_brain.api.app:app --port 8000
+Write-Host "Pronto: http://localhost:8000" -ForegroundColor Green

@@ -103,12 +103,18 @@ python -m mtg_brain ingest prices symbols   # preços (default-cards) e símbolo
 # 5. confere
 python -m mtg_brain stats
 
-# 6. frontend
+# 6. frontend (gera web/dist, que entra na imagem do app)
 cd web; npm install; npm run build; cd ..
 
-# 7. sobe tudo (Postgres + API que serve o app) e abre o navegador
-.\iniciar.ps1        # http://localhost:8000
+# 7. sobe TUDO (banco + API) via Docker — e religa sozinho no boot
+docker compose up -d --build     # http://localhost:8000  (ou: .\iniciar.ps1)
 ```
+
+> Depois disso é só abrir **http://localhost:8000** — o Docker reinicia banco + API sozinho
+> quando você liga o PC (`restart: unless-stopped`). Não precisa rodar mais nada.
+> Mudou o código? `docker compose up -d --build` reconstrói. Para desenvolvimento com
+> hot-reload, rode a API no host: `uvicorn mtg_brain.api.app:app --reload` (pare o container
+> `mtg-brain-api` antes, pra liberar a porta 8000).
 
 > **Regras (Comprehensive Rules):** o `.txt` muda a cada coleção. Pegue o link atual em
 > <https://magic.wizards.com/en/rules>, ponha em `CR_TXT_URL` no `.env` e rode

@@ -17,5 +17,18 @@ services:
       timeout: 5s
       retries: 12
 
+  # API + frontend. Sobe junto com o banco; reinicia sozinho no boot do Docker.
+  app:
+    build: .
+    container_name: mtg-brain-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mtg}:${POSTGRES_PASSWORD:-mtg}@db:5432/${POSTGRES_DB:-mtg}
+    ports:
+      - "8000:8000"
+
 volumes:
   mtg_pgdata:
