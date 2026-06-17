@@ -182,12 +182,12 @@ export const api = {
     return get<CardSummary[]>(`/commanders?${p.toString()}`)
   },
 
-  searchCards: (q: string, colors: string[] = [], sort = 'edhrec') => {
+  searchCards: (q: string, colors: string[] = [], sort = 'edhrec', limit = 100) => {
     const p = new URLSearchParams()
     if (q) p.set('q', q)
     colors.forEach((c) => p.append('colors', c))
     p.set('sort', sort)
-    p.set('limit', '100')
+    p.set('limit', String(limit))
     return get<CardSummary[]>(`/cards?${p.toString()}`)
   },
 

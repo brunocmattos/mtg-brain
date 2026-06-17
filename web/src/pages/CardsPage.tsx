@@ -21,7 +21,7 @@ export default function CardsPage() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['cards', submitted, colors, sort],
-    queryFn: () => api.searchCards(submitted, colors, sort),
+    queryFn: () => api.searchCards(submitted, colors, sort, 101),
     enabled: submitted.length > 0 || colors.length > 0,
   })
 
@@ -81,13 +81,12 @@ export default function CardsPage() {
       {data && data.length === 0 && <p className="text-muted">Nada encontrado.</p>}
       {data && data.length > 0 && (
         <p className="text-muted text-xs mb-2">
-          {data.length}
-          {data.length >= 100 ? '+ (mostrando as 100 primeiras)' : ''} carta(s)
+          {data.length > 100 ? 'mais de 100 cartas (mostrando as 100 primeiras)' : `${data.length} carta(s)`}
         </p>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        {data?.map((c) => (
+        {data?.slice(0, 100).map((c) => (
           <CommanderCard key={c.id} c={c} onClick={() => setSelected(c.id)} />
         ))}
       </div>

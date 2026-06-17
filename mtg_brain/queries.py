@@ -164,25 +164,6 @@ def combos_for_identity(identity, limit=20):
     return _rows(sql, {"re": regex, "limit": _limit(limit, 20, 100)})
 
 
-def deck_price(card_names):
-    """Soma o preço USD de uma lista de nomes de carta (uma impressão por nome)."""
-    sql = """
-        WITH wanted AS (SELECT unnest(%(names)s::text[]) AS name),
-        priced AS (
-            SELECT DISTINCT ON (w.name) w.name, (c.prices->>'usd')::numeric AS usd
-            FROM wanted w
-            LEFT JOIN cards c ON c.name = w.name
-            ORDER BY w.name, usd ASC NULLS LAST
-        )
-        SELECT
-            COALESCE(SUM(usd), 0) AS total_usd,
-            COUNT(*) FILTER (WHERE usd IS NOT NULL) AS com_preco,
-            ARRAY_AGG(name) FILTER (WHERE usd IS NULL) AS sem_preco
-        FROM priced
-    """
-    return _rows(sql, {"names": list(card_names)})[0]
-
-
 # ============================================================ Deck Builder (Fase 3)
 
 def _write(sql, params=None):
@@ -369,16 +350,22 @@ def _deck_cards(deck_id):
     return _rows(f"""
         SELECT dc.card_name AS name, dc.qty, dc.is_commander, c.id::text AS id,
                c.type_line, c.cmc, c.mana_cost, c.color_identity, c.oracle_text,
-               c.usd, c.eur, c.tix, c.image, c.art_crop
+               p.usd, p.eur, p.tix, c.image, c.art_crop
         FROM deck_cards dc
         LEFT JOIN LATERAL (
             SELECT id, type_line, cmc, mana_cost, color_identity, oracle_text,
-                   (prices->>'usd')::numeric AS usd, (prices->>'eur')::numeric AS eur,
-                   (prices->>'tix')::numeric AS tix, {_img('normal')} AS image,
-                   {_img('art_crop')} AS art_crop
+                   {_img('normal')} AS image, {_img('art_crop')} AS art_crop
             FROM cards WHERE name = dc.card_name
             ORDER BY (prices->>'usd')::numeric ASC NULLS LAST LIMIT 1
         ) c ON true
+        LEFT JOIN LATERAL (
+            -- preço mais barato DISPONÍVEL em cada moeda (independente), senão eur/tix
+            -- ficavam nulos quando a impressão mais barata em USD não tinha aquela moeda
+            SELECT MIN((prices->>'usd')::numeric) AS usd,
+                   MIN((prices->>'eur')::numeric) AS eur,
+                   MIN((prices->>'tix')::numeric) AS tix
+            FROM cards WHERE name = dc.card_name
+        ) p ON true
         WHERE dc.deck_id = %(id)s
         ORDER BY c.cmc NULLS FIRST, dc.card_name
     """, {"id": deck_id})
