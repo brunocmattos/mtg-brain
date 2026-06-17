@@ -156,6 +156,37 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
         {fx?.source === 'fallback' ? ' · câmbio aprox.' : ''}
       </div>
 
+      {a.power && (
+        <div className="rounded bg-surface-2 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] uppercase tracking-wide text-muted">Poder &amp; Consistência</span>
+            <span className="cursor-help text-xs text-muted" title="Estimativa de quão bem montado/forte o deck está — NÃO é taxa de vitória (não modela oponentes, pilotagem nem sorte).">ⓘ</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-2xl font-bold text-accent">{a.power.score}</span>
+            <span className="text-sm text-muted">/100</span>
+            <span className="text-sm font-semibold">· {a.power.label}</span>
+          </div>
+          <div className="mt-2 space-y-1.5">
+            {a.power.axes.map((ax) => (
+              <div key={ax.key} title={ax.detail}>
+                <div className="flex justify-between text-[11px]">
+                  <span>{ax.label}</span>
+                  <span className="text-muted">{ax.score.toFixed(1)}/10</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded bg-bg">
+                  <div className="h-full bg-primary" style={{ width: `${Math.min(100, ax.score * 10)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-[10px] text-muted">
+            {a.power.verdict} <span className="opacity-70">Estimativa de construção, não taxa de vitória.</span>
+          </div>
+          {a.power.note && <div className="mt-1 text-[10px] text-amber-400">{a.power.note}</div>}
+        </div>
+      )}
+
       {/* identidade + completude */}
       <div className="space-y-1 text-xs">
         <div className="flex items-center gap-2">

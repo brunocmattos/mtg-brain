@@ -416,6 +416,11 @@ def _is_interaction(text):
     return any(k in t for k in _INTERACTION)
 
 
+def _is_tutor(text):
+    # tutores genéricos ("Search your library for a card") — não conta busca-terreno (isso é ramp)
+    return "search your library for a card" in (text or "").lower()
+
+
 def combos_in_deck(names, limit=60):
     if not names:
         return []
@@ -515,6 +520,59 @@ def _deck_bracket(gc, two_card_combos, mld, extra_turns, total_combos):
             "reason": "sem game changers, combos, MLD ou turnos extras", "note": None}
 
 
+# ---- Rank de Poder & Consistência (heurístico, NÃO é taxa de vitória) ----
+
+def _band(v, lo, hi, hard_lo, hard_hi):
+    """10 dentro de [lo,hi]; decai linear até 0 nos extremos hard_lo/hard_hi."""
+    if lo <= v <= hi:
+        return 10.0
+    if v < lo:
+        return round(max(0.0, 10.0 * (v - hard_lo) / (lo - hard_lo)), 1) if lo > hard_lo else 0.0
+    return round(max(0.0, 10.0 * (hard_hi - v) / (hard_hi - hi)), 1) if hard_hi > hi else 0.0
+
+
+def _curve_score(avg):  # curva mais baixa = mais consistente
+    if avg <= 2.8:
+        return 10.0
+    if avg >= 4.5:
+        return 0.0
+    return round(10.0 * (4.5 - avg) / (4.5 - 2.8), 1)
+
+
+def _power_rank(*, lands, ramp, draw, interaction, avg_cmc, combos, gc, tutors, complete):
+    """Score 0-100 de quão bem montado/forte o deck é. Reaproveita os números da análise.
+    NÃO é probabilidade de ganhar — não modela oponentes, pilotagem nem sorte."""
+    s_lands = _band(lands, 35, 39, 28, 45)
+    s_ramp = _band(ramp, 9, 14, 2, 20)
+    s_draw = _band(draw, 8, 13, 2, 20)
+    s_curve = _curve_score(avg_cmc)
+    consistency = round((s_lands + s_ramp + s_draw + s_curve) / 4, 1)
+    inter = _band(interaction, 8, 12, 2, 18)
+    threat = round(min(10.0, 2.0 + min(combos, 4) * 1.3 + min(gc, 5) * 0.8 + min(tutors, 6) * 0.4), 1)
+
+    overall = round((consistency * 0.40 + inter * 0.25 + threat * 0.35) * 10)
+    if not complete:
+        overall = min(overall, 55)  # deck incompleto não pode pontuar alto
+
+    # rótulo de poder (descritivo; NÃO afirma cEDH — isso depende de sinais que não dá pra medir)
+    label = ("Altíssimo poder" if overall >= 85 else "Forte" if overall >= 70
+             else "Sólido" if overall >= 55 else "Casual+" if overall >= 40
+             else "Casual / em construção")
+
+    axes = [
+        {"key": "consistencia", "label": "Consistência", "score": consistency,
+         "detail": f"{lands} terrenos · {ramp} ramp · {draw} compra · CMC {avg_cmc}"},
+        {"key": "interacao", "label": "Interação", "score": inter,
+         "detail": f"{interaction} peça(s) de remoção/proteção"},
+        {"key": "poder", "label": "Ameaça / poder", "score": threat,
+         "detail": f"{combos} combo(s) · {gc} game changer(s) · {tutors} tutor(es)"},
+    ]
+    weakest = min(axes, key=lambda a: a["score"])
+    verdict = f"Ponto mais fraco: {weakest['label'].lower()}." if overall < 70 else "Deck redondo e afiado."
+    return {"score": overall, "label": label, "axes": axes, "verdict": verdict,
+            "note": None if complete else "Deck incompleto (≠100 cartas) — score limitado."}
+
+
 def deck_analysis(deck_id):
     if not _rows("SELECT 1 FROM decks WHERE id=%(id)s", {"id": deck_id}):
         return None  # deck inexistente → a rota devolve 404 (em vez de análise vazia falsa)
@@ -523,7 +581,7 @@ def deck_analysis(deck_id):
     types, colors = {}, {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0}
     curve = {str(i): 0 for i in range(7)}
     curve["7+"] = 0
-    lands = ramp = draw = interaction = 0
+    lands = ramp = draw = interaction = tutors = 0
     cmc_sum = cmc_n = 0
     price = price_eur = price_tix = 0.0
     missing_price, pool = [], []
@@ -547,6 +605,8 @@ def deck_analysis(deck_id):
             draw += q
         if _is_interaction(r["oracle_text"]):
             interaction += q
+        if _is_tutor(r["oracle_text"]):
+            tutors += q
         if r["name"] in BASIC_LAND_NAMES:
             pass  # básicos não contam no preço
         else:
@@ -573,13 +633,18 @@ def deck_analysis(deck_id):
     mld = any(_is_mld(r["name"], r["oracle_text"]) for r in cards)
     extra_turns = any(_is_extra_turn(r["oracle_text"]) for r in cards)
     two_card_win = sum(1 for c in combos_present if _is_win_combo(c))
+    avg_cmc = round(cmc_sum / cmc_n, 2) if cmc_n else 0
+    power = _power_rank(
+        lands=lands, ramp=ramp, draw=draw, interaction=interaction, avg_cmc=avg_cmc,
+        combos=len(combos_present), gc=len(gc), tutors=tutors, complete=(total == 100),
+    )
 
     return {
         "total_cards": total,
         "types": types,
         "predominant_type": predominant,
         "curve": curve,
-        "avg_cmc": round(cmc_sum / cmc_n, 2) if cmc_n else 0,
+        "avg_cmc": avg_cmc,
         "colors": colors,
         "identity": identity,
         "completeness": {
@@ -589,6 +654,7 @@ def deck_analysis(deck_id):
             "off_color": off_color,
         },
         "bracket": _deck_bracket(gc, two_card_win, mld, extra_turns, len(combos_present)),
+        "power": power,
         "game_changers": gc,
         # Limiares são guias de Commander (heurística), não regra absoluta.
         "health": {
