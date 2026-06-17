@@ -333,25 +333,33 @@ def _parse_decklist(text):
     return items
 
 
+_EXACT = "SELECT name FROM cards WHERE name = %(n)s ORDER BY (layout='token') LIMIT 1"
+_CI = ("SELECT name FROM cards WHERE lower(name) = lower(%(n)s) "
+       "ORDER BY (layout='token'), edhrec_rank NULLS LAST LIMIT 1")
+
+
 def _resolve_card_name(name):
-    """Casa o nome lido com o nome canônico no banco: exato -> igualdade case-insensitive
-    -> face de DFC. Prefere impressão real (layout<>'token') e NÃO usa o nome do usuário
-    como padrão LIKE (evita que '_'/'%' virem curinga e resolvam carta errada)."""
-    r = _rows("SELECT name FROM cards WHERE name = %(n)s "
-              "ORDER BY (layout='token') LIMIT 1", {"n": name})
-    if r:
-        return r[0]["name"]
-    r = _rows("SELECT name FROM cards WHERE lower(name) = lower(%(n)s) "
-              "ORDER BY (layout='token'), edhrec_rank NULLS LAST LIMIT 1", {"n": name})
-    if r:
-        return r[0]["name"]
-    # DFC: nome só do front -> casa "front // back" (escapa curingas do nome do usuário)
-    esc = name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    r = _rows("SELECT name FROM cards WHERE name ILIKE %(n)s ESCAPE '\\' "
-              "ORDER BY (layout='token'), edhrec_rank NULLS LAST LIMIT 1", {"n": esc + " // %"})
-    if r:
-        return r[0]["name"]
-    return None
+    """Casa o nome lido com o nome canônico no banco. Prefere impressão real
+    (layout<>'token') e NÃO usa o nome do usuário como padrão LIKE (curingas '_'/'%').
+    Trata dupla-face: Moxfield exporta "A / B" (barra simples), o banco usa "A // B"."""
+    def first(sql, val):
+        r = _rows(sql, {"n": val})
+        return r[0]["name"] if r else None
+
+    hit = first(_EXACT, name) or first(_CI, name)
+    if hit:
+        return hit
+    # "A / B" (Moxfield) -> "A // B" (banco)
+    if " / " in name and " // " not in name:
+        dfc = name.replace(" / ", " // ")
+        hit = first(_EXACT, dfc) or first(_CI, dfc)
+        if hit:
+            return hit
+    # só o front -> casa "front // back" (escapa curingas)
+    front = name.split(" // ")[0].split(" / ")[0].strip()
+    esc = front.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return first("SELECT name FROM cards WHERE name ILIKE %(n)s ESCAPE '\\' "
+                 "ORDER BY (layout='token'), edhrec_rank NULLS LAST LIMIT 1", esc + " // %")
 
 
 def import_deck(deck_name, text, commander=None):
