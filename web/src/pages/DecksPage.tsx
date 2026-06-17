@@ -5,6 +5,8 @@ import type { CardSummary, DeckCardRow, Deck } from '../api'
 import DeckAnalysis from '../components/DeckAnalysis'
 import CommanderPicker from '../components/CommanderPicker'
 import DeckImporter from '../components/DeckImporter'
+import PrintingPicker from '../components/PrintingPicker'
+import type { Printing } from '../api'
 import { ManaCost } from '../components/Mana'
 
 export default function DecksPage() {
@@ -162,17 +164,19 @@ function CardLine({
   onRemove,
   onHover,
   onPin,
+  onVersions,
 }: {
   c: DeckCardRow
   onRemove: () => void
   onHover: (img: string | null) => void
   onPin: (img: string | null) => void
+  onVersions: () => void
 }) {
   return (
     <div
       onMouseEnter={() => onHover(c.image)}
       onMouseLeave={() => onHover(null)}
-      className="flex items-center justify-between rounded px-2 py-1 text-sm hover:bg-surface-2"
+      className="group flex items-center justify-between rounded px-2 py-1 text-sm hover:bg-surface-2"
     >
       <button onClick={() => onPin(c.image)} className={`truncate text-left hover:text-primary ${c.is_commander ? 'text-accent' : ''}`}>
         {c.is_commander ? '★ ' : ''}
@@ -182,8 +186,9 @@ function CardLine({
       <span className="flex items-center gap-2 text-xs text-muted shrink-0 pl-2">
         <ManaCost cost={c.mana_cost} />
         <span title={priceTip(c)} className="cursor-help">{c.usd != null ? `$${c.usd.toFixed(2)}` : '—'}</span>
+        <button onClick={onVersions} className={`hover:text-primary ${c.printing ? 'text-accent' : 'opacity-0 group-hover:opacity-100'}`} title="versão / arte">⇄</button>
         {!c.is_commander && (
-          <button onClick={onRemove} className="hover:text-red-400" title="remover">✕</button>
+          <button onClick={onRemove} className="hover:text-red-400" title="remover (−1)">✕</button>
         )}
       </span>
     </div>
@@ -195,11 +200,13 @@ function CardTile({
   onRemove,
   onHover,
   onPin,
+  onVersions,
 }: {
   c: DeckCardRow
   onRemove: () => void
   onHover: (img: string | null) => void
   onPin: (img: string | null) => void
+  onVersions: () => void
 }) {
   return (
     <div
@@ -232,6 +239,10 @@ function CardTile({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-bg/90 to-transparent px-2 py-1 text-right text-[11px] opacity-0 transition group-hover:opacity-100">
         {c.usd != null ? `$${c.usd.toFixed(2)}` : '—'}
       </div>
+      <button onClick={onVersions} title="versão / arte"
+        className={`absolute bottom-1 left-1 flex h-6 w-6 items-center justify-center rounded-full bg-bg/80 text-xs transition hover:text-primary ${c.printing ? 'text-accent opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+        ⇄
+      </button>
     </div>
   )
 }
@@ -247,6 +258,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
   const [toast, setToast] = useState<string | null>(null)
   const [view, setView] = useState<'list' | 'grid'>('list')
   const [confirmDel, setConfirmDel] = useState(false)
+  const [printingFor, setPrintingFor] = useState<DeckCardRow | null>(null)
   const search = useQuery({ queryKey: ['cardsearch', submitted], queryFn: () => api.searchCards(submitted), enabled: submitted.length > 0 })
   const suggestions = useQuery({ queryKey: ['suggest', deck?.commander], queryFn: () => api.suggest(deck!.commander!), enabled: !!deck?.commander })
 
@@ -266,6 +278,10 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
       qc.invalidateQueries({ queryKey: ['decks'] })
       onBack()
     },
+  })
+  const setPrint = useMutation({
+    mutationFn: (p: Printing | null) => api.setPrinting(id, printingFor!.name, p),
+    onSuccess: () => { refresh(); setPrintingFor(null) },
   })
 
   const total = deck?.cards.reduce((s, c) => s + c.qty, 0) ?? 0
@@ -382,7 +398,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
                     {TYPE_LABEL[t]} ({groups[t].reduce((s, c) => s + c.qty, 0)})
                   </h3>
                   {groups[t].map((c) => (
-                    <CardLine key={c.name} c={c} onRemove={() => remove.mutate(c.name)} onHover={setHovered} onPin={setPinned} />
+                    <CardLine key={c.name} c={c} onRemove={() => remove.mutate(c.name)} onHover={setHovered} onPin={setPinned} onVersions={() => setPrintingFor(c)} />
                   ))}
                 </div>
               ))}
@@ -396,7 +412,7 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
                   </h3>
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
                     {groups[t].map((c) => (
-                      <CardTile key={c.name} c={c} onRemove={() => remove.mutate(c.name)} onHover={setHovered} onPin={setPinned} />
+                      <CardTile key={c.name} c={c} onRemove={() => remove.mutate(c.name)} onHover={setHovered} onPin={setPinned} onVersions={() => setPrintingFor(c)} />
                     ))}
                   </div>
                 </div>
@@ -439,6 +455,15 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-surface-2 border border-primary/50 rounded-lg px-4 py-2 text-sm shadow-2xl">
           {toast}
         </div>
+      )}
+
+      {printingFor && (
+        <PrintingPicker
+          cardName={printingFor.name}
+          current={printingFor.printing}
+          onSelect={(p) => setPrint.mutate(p)}
+          onClose={() => setPrintingFor(null)}
+        />
       )}
     </div>
   )

@@ -57,6 +57,18 @@ export interface DeckSummary {
   commander_image?: string | null
 }
 
+export interface Printing {
+  scryfall_id: string
+  set: string
+  set_name: string
+  collector_number: string
+  image: string | null
+  art_crop: string | null
+  usd: string | null
+  eur: string | null
+  tix: string | null
+}
+
 export interface DeckCardRow {
   id: string
   name: string
@@ -71,6 +83,7 @@ export interface DeckCardRow {
   tix: number | null
   image: string | null
   art_crop: string | null
+  printing: Printing | null
 }
 
 export interface Deck {
@@ -208,6 +221,9 @@ export const api = {
   removeCard: (id: number, name: string) =>
     del<{ ok: boolean }>(`/decks/${id}/cards?name=${encodeURIComponent(name)}`),
   deckAnalysis: (id: number) => get<DeckAnalysisData>(`/decks/${id}/analysis`),
+  cardPrintings: (card: string) => get<Printing[]>(`/printings?card=${encodeURIComponent(card)}`),
+  setPrinting: (deckId: number, cardName: string, printing: Printing | null) =>
+    post<{ ok: boolean }>(`/decks/${deckId}/cards/printing`, { card_name: cardName, printing }),
   suggest: (commander: string) =>
     get<CardSummary[]>(`/commanders/suggest?commander=${encodeURIComponent(commander)}&limit=30`),
   symbols: () => get<Record<string, string>>('/symbols'),

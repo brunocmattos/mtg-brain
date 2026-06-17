@@ -107,6 +107,11 @@ def combos(card: str | None = None, identity: str | None = None, limit: int = 20
     raise HTTPException(status_code=400, detail="informe ?card= ou ?identity=")
 
 
+@api.get("/printings")
+def printings(card: str):
+    return queries.card_printings(card)
+
+
 class DeckCreate(BaseModel):
     name: str
     commander: str | None = None
@@ -122,6 +127,11 @@ class DeckImport(BaseModel):
     name: str
     text: str
     commander: str | None = None
+
+
+class PrintingBody(BaseModel):
+    card_name: str
+    printing: dict | None = None  # None = volta pra impressão padrão
 
 
 @api.post("/decks")
@@ -158,6 +168,11 @@ def delete_deck(deck_id: int):
 @api.post("/decks/{deck_id}/cards")
 def add_card(deck_id: int, body: DeckCardBody):
     return queries.add_card(deck_id, body.card_name, body.qty, body.is_commander)
+
+
+@api.post("/decks/{deck_id}/cards/printing")
+def set_printing(deck_id: int, body: PrintingBody):
+    return queries.set_printing(deck_id, body.card_name, body.printing)
 
 
 @api.delete("/decks/{deck_id}/cards")

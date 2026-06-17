@@ -1,14 +1,14 @@
 """Consultas determinísticas (SQL parametrizado, SEM LLM) que a API expõe.
 
-Rápidas e previsíveis — o LLM (brain.ask) fica só para o chat livre e para redigir
-resumos. Cartas dupla-face têm image_uris NULL no topo, então a imagem cai para o
-primeiro face em data->'card_faces'.
+Rápidas e previsíveis. Cartas dupla-face têm image_uris NULL no topo, então a imagem
+cai para o primeiro face em data->'card_faces'.
 """
 import datetime
+import json
 import re
 from decimal import Decimal
 
-from . import db
+from . import config, db, http
 
 
 def _img(size):
@@ -233,6 +233,62 @@ def delete_deck(deck_id):
     return {"ok": True}
 
 
+# ---- Versões / artes de uma carta (impressões via Scryfall, sob demanda + cache) ----
+
+_PRINTINGS_CACHE = {}
+
+
+def _scry_img(c, size):
+    u = c.get("image_uris") or {}
+    if u.get(size):
+        return u[size]
+    for face in (c.get("card_faces") or []):
+        fu = face.get("image_uris") or {}
+        if fu.get(size):
+            return fu[size]
+    return None
+
+
+def card_printings(name):
+    """Todas as impressões (arte/edição/preço) de uma carta — busca no Scryfall sob demanda
+    (sem reingerir o bulk de impressões) e cacheia por nome durante a sessão."""
+    if name in _PRINTINGS_CACHE:
+        return _PRINTINGS_CACHE[name]
+    out = []
+    try:
+        resp = http.session().get(
+            f"{config.SCRYFALL_API}/cards/search",
+            params={"q": f'!"{name}"', "unique": "prints", "order": "released", "dir": "desc"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            for c in resp.json().get("data", [])[:80]:
+                pr = c.get("prices") or {}
+                out.append({
+                    "scryfall_id": c.get("id"),
+                    "set": c.get("set"),
+                    "set_name": c.get("set_name"),
+                    "collector_number": c.get("collector_number"),
+                    "image": _scry_img(c, "normal"),
+                    "art_crop": _scry_img(c, "art_crop"),
+                    "usd": pr.get("usd"),
+                    "eur": pr.get("eur"),
+                    "tix": pr.get("tix"),
+                })
+    except Exception:  # noqa: BLE001 — falha de rede: devolve vazio, a UI lida
+        return []
+    _PRINTINGS_CACHE[name] = out
+    return out
+
+
+def set_printing(deck_id, card_name, printing):
+    """Fixa (ou limpa, com printing=None) a impressão escolhida de uma carta no deck."""
+    val = json.dumps(printing) if printing else None
+    _write("UPDATE deck_cards SET printing = %(p)s::jsonb WHERE deck_id=%(d)s AND card_name=%(n)s",
+           {"p": val, "d": deck_id, "n": card_name})
+    return {"ok": True}
+
+
 # ---- Importador de decklist (colar texto do Moxfield/Archidekt/etc.) ----
 
 _CARD_LINE = re.compile(r"^\s*(\d+)\s*[xX]?\s+(.+?)\s*$")
@@ -350,7 +406,12 @@ def _deck_cards(deck_id):
     return _rows(f"""
         SELECT dc.card_name AS name, dc.qty, dc.is_commander, c.id::text AS id,
                c.type_line, c.cmc, c.mana_cost, c.color_identity, c.oracle_text,
-               p.usd, p.eur, p.tix, c.image, c.art_crop
+               COALESCE((dc.printing->>'usd')::numeric, p.usd) AS usd,
+               COALESCE((dc.printing->>'eur')::numeric, p.eur) AS eur,
+               COALESCE((dc.printing->>'tix')::numeric, p.tix) AS tix,
+               COALESCE(dc.printing->>'image', c.image) AS image,
+               COALESCE(dc.printing->>'art_crop', c.art_crop) AS art_crop,
+               dc.printing
         FROM deck_cards dc
         LEFT JOIN LATERAL (
             SELECT id, type_line, cmc, mana_cost, color_identity, oracle_text,
