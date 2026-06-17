@@ -194,24 +194,6 @@ export const api = {
   combosForCard: (name: string) =>
     get<Combo[]>(`/combos?card=${encodeURIComponent(name)}&limit=15`),
 
-  chat: async (question: string): Promise<{ answer: string }> => {
-    // modelo local pode demorar; corta em 120s pra não travar a UI pra sempre
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), 120_000)
-    try {
-      const r = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
-        signal: ctrl.signal,
-      })
-      if (!r.ok) throw new Error(`${r.status}`)
-      return r.json() as Promise<{ answer: string }>
-    } finally {
-      clearTimeout(timer)
-    }
-  },
-
   listDecks: () => get<DeckSummary[]>('/decks'),
   createDeck: (name: string, commander: string | null) =>
     post<DeckSummary>('/decks', { name, commander }),

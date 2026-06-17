@@ -12,12 +12,12 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .. import brain, config, db, fx, http, queries
+from .. import db, fx, queries
 
 app = FastAPI(
     title="mtg-brain",
     version="0.1.0",
-    description="Cérebro local de Magic: The Gathering — cartas, combos, regras e chat.",
+    description="Magic: The Gathering — cartas, combos, regras, comandantes e decks.",
 )
 
 # CORS só para o dev server do Vite (Fase 2). Em produção tudo vem da mesma origem.
@@ -31,24 +31,14 @@ app.add_middleware(
 api = APIRouter(prefix="/api")
 
 
-class ChatRequest(BaseModel):
-    question: str
-    verbose: bool = False
-
-
 @api.get("/health")
 def health():
-    status = {"db": "ok", "llm": "ok"}
+    status = {"db": "ok"}
     try:
         with db.connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT 1")
     except Exception as e:  # noqa: BLE001
         status["db"] = f"erro: {e}"
-    try:
-        r = http.session().get(config.LLM_BASE_URL.rstrip("/") + "/models", timeout=3)
-        r.raise_for_status()
-    except Exception as e:  # noqa: BLE001
-        status["llm"] = f"erro: {e}"
     return status
 
 
@@ -115,11 +105,6 @@ def combos(card: str | None = None, identity: str | None = None, limit: int = 20
     if identity:
         return queries.combos_for_identity(identity, limit)
     raise HTTPException(status_code=400, detail="informe ?card= ou ?identity=")
-
-
-@api.post("/chat")
-def chat(req: ChatRequest):
-    return {"answer": brain.ask(req.question, verbose=req.verbose)}
 
 
 class DeckCreate(BaseModel):
@@ -196,7 +181,7 @@ def suggest(commander: str, limit: int = 40):
 app.include_router(api)
 
 # Serve o frontend (build do React) com fallback de SPA: rotas client-side
-# (/commanders, /cards, /chat) devolvem index.html; assets reais são servidos direto.
+# (/commanders, /cards, /decks) devolvem index.html; assets reais são servidos direto.
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DIST = os.path.join(_REPO, "web", "dist")
 if os.path.isdir(_DIST):

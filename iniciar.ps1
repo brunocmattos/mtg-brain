@@ -1,6 +1,5 @@
 # Sobe o mtg-brain: Postgres (Docker) + API (que serve o frontend) e abre o navegador.
-# Pré-requisitos (uma vez): docker, Ollama instalado (roda como serviço), e o frontend
-# buildado (cd web; npm run build). O Ollama já sobe sozinho com o Windows.
+# Pré-requisitos (uma vez): docker e o frontend buildado (cd web; npm run build).
 $ErrorActionPreference = 'Stop'
 $repo = $PSScriptRoot
 Set-Location $repo

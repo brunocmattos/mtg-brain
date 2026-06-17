@@ -51,11 +51,6 @@ def cmd_stats(_):
         print(f"  {table:10} {n}")
 
 
-def cmd_ask(args):
-    from .brain import ask
-    print("\n" + ask(" ".join(args.question), verbose=args.verbose) + "\n")
-
-
 def main():
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -74,11 +69,6 @@ def main():
     pi.set_defaults(func=cmd_ingest)
 
     sub.add_parser("stats", help="conta registros por tabela").set_defaults(func=cmd_stats)
-
-    pa = sub.add_parser("ask", help="pergunta em português ao cérebro (Fase 3)")
-    pa.add_argument("question", nargs="+", help="sua pergunta")
-    pa.add_argument("-v", "--verbose", action="store_true", help="mostra as queries SQL")
-    pa.set_defaults(func=cmd_ask)
 
     args = p.parse_args()
     args.func(args)

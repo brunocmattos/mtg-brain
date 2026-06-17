@@ -1,15 +1,15 @@
 # mtg-brain
 
-> Um “cérebro” local de **Magic: The Gathering** — banco de dados completo + API + app web + assistente de I.A. (RAG por *tool use*). Tudo rodando na sua máquina, a custo **US$ 0**.
+> Um “cérebro” local de **Magic: The Gathering** — banco de dados completo + API + app web. Tudo rodando na sua máquina, a custo **US$ 0**.
 
-O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, regras oficiais, combos), guarda em Postgres e expõe isso de três formas: uma **API HTTP**, um **app web** com cara de site de Magic de verdade, e um **chat** em que um LLM responde perguntas consultando o banco em SQL somente-leitura.
+O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, regras oficiais, combos), guarda em Postgres e expõe isso de duas formas: uma **API HTTP** e um **app web** com cara de site de Magic de verdade. Para perguntas em linguagem natural, um **servidor MCP** liga o banco direto ao Claude Code (ver [Inteligência via MCP](#inteligência-via-mcp)) — sem precisar de LLM local.
 
 | | |
 |---|---|
-| **Stack** | Python · FastAPI · PostgreSQL 17 · React + TypeScript · Vite · Tailwind · Ollama (LLM local) |
+| **Stack** | Python · FastAPI · PostgreSQL 17 · React + TypeScript · Vite · Tailwind |
 | **Fontes** | Scryfall · Commander Spellbook · Comprehensive Rules (WotC) |
 | **Dados** | ~38 mil cartas · ~92 mil combos · regras oficiais · símbolos de mana oficiais |
-| **Custo** | US$ 0 — Postgres em Docker e LLM local (Ollama) |
+| **Custo** | US$ 0 — só Postgres em Docker |
 
 ---
 
@@ -19,8 +19,8 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
 - **Pesquisar qualquer carta** por nome ou texto de regras (`destroy target creature`, `loses life`…).
 - **Montar decks** a partir de um **seletor de comandante** com filtros (cor, CMC, tema), com busca, sugestões por comandante, preview grande da carta no canto, e visualização em **lista** ou **grade de imagens** (estilo Moxfield/Archidekt).
 - **Analisar o deck**: contagem por tipo, curva de mana, identidade de cor, ramp/compra/interação/terrenos, **bracket** (sistema oficial WotC), **combos presentes**, **preço em US$/R$ + 3 fontes** (TCGplayer/Cardmarket/MTGO) e um **rank de Poder & Consistência** (heurístico, *não* é taxa de vitória) e um indicador de **pontos fracos** ("o que falta": resposta em velocidade de instante, wipes, counters, ramp, compra…).
-- **Exportar a decklist** em `.txt` (`<qtd> <nome>`, comandante no topo) — importável no Tabletop Simulator, Moxfield e Archidekt.
-- **Conversar com o cérebro** em português: o LLM consulta o banco e responde citando cartas, combos e regras.
+- **Importar decklist** (colar do Moxfield/Archidekt) e **exportar** em `.txt` (`<qtd> <nome>`, comandante no topo) — importável no Tabletop Simulator, Moxfield e Archidekt.
+- **Perguntar em linguagem natural** via o **MCP** conectado ao Claude Code (sem LLM local) — ver abaixo.
 
 ### Telas
 
@@ -52,10 +52,10 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
                                    └───────┬───────────────┬───────┘
                                            ▼               ▼
         ┌────────────────────────────────────┐   ┌────────────────────────┐
-        │  queries.py — SQL determinístico    │   │  brain.py — LLM/RAG     │
-        │  (busca, análise, bracket, combos)  │   │  tool use: run_sql      │
-        └───────────────┬─────────────────────┘   │  (SELECT-only, 15s)     │
-                        ▼                          └───────────┬────────────┘
+        │  queries.py — SQL determinístico    │   │  servidor MCP (Postgres)│
+        │  (busca, análise, bracket, combos)  │   │  conecta o banco ao     │
+        └───────────────┬─────────────────────┘   │  Claude Code (NL → SQL) │
+                        ▼                          └─────────────────────────┘
               ┌─────────────────────────────────────────────────────┐
               │  FastAPI (mtg_brain/api/app.py) — rotas /api/*       │
               │  serve também o build do React (mesma origem)        │
@@ -63,7 +63,7 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
                                           ▼
               ┌─────────────────────────────────────────────────────┐
               │  React + TS + Vite + Tailwind (web/)                 │
-              │  Comandantes · Cartas · Decks · Conversar            │
+              │  Comandantes · Cartas · Decks                       │
               └─────────────────────────────────────────────────────┘
 ```
 
@@ -81,7 +81,7 @@ Detalhe completo da arquitetura em **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md
 
 ## Setup
 
-Pré-requisitos: **Docker**, **Python 3.12+** e (para o chat) **[Ollama](https://ollama.com)**.
+Pré-requisitos: **Docker** e **Python 3.12+**.
 
 ```powershell
 # 1. configuração
@@ -114,15 +114,15 @@ cd web; npm install; npm run build; cd ..
 > <https://magic.wizards.com/en/rules>, ponha em `CR_TXT_URL` no `.env` e rode
 > `python -m mtg_brain ingest rules`.
 
-### Chat local (opcional, US$ 0)
+### Inteligência via MCP
 
-```powershell
-ollama pull qwen2.5:14b     # ~9 GB; precisa de um modelo com tool calling
-python -m mtg_brain ask "que combos existem com Gravecrawler?" -v
+Para perguntas em linguagem natural ("quais combos com Gravecrawler?", "comandantes UB de dreno até US$5"), o banco é exposto ao **Claude Code** por um servidor **MCP** de Postgres — não há LLM local nem custo. Conecte uma vez:
+
+```bash
+claude mcp add mtg-brain -s user -- npx -y @modelcontextprotocol/server-postgres "postgresql://mtg:mtg@localhost:5432/mtg"
 ```
 
-`-v` mostra as queries SQL que o modelo rodou. Backend/modelo se trocam no `.env`
-(`LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`) — serve também para Groq/Gemini grátis.
+Depois é só perguntar no Claude Code; ele consulta o banco (read-only) e responde citando cartas, combos e regras. O app web foca no que faz bem de forma determinística (dados, busca, decks, análise).
 
 ---
 
@@ -133,7 +133,6 @@ python -m mtg_brain ask "que combos existem com Gravecrawler?" -v
 | `python -m mtg_brain init-db` | cria/atualiza o schema |
 | `python -m mtg_brain ingest <alvos…>` | `sets`, `catalogs`, `cards`, `rulings`, `rules`, `combos`, `prices`, `symbols` ou `all` |
 | `python -m mtg_brain stats` | conta registros por tabela |
-| `python -m mtg_brain ask "<pergunta>" [-v]` | pergunta ao cérebro pela linha de comando |
 
 A ingestão é **idempotente** (tudo é upsert) e **resumível** (combos retomam do offset em caso de rate-limit), então pode rodar de novo pra atualizar.
 
@@ -145,14 +144,15 @@ Tudo sob `/api`. Veja a doc interativa em `http://localhost:8000/docs` (Swagger,
 
 | Método e rota | Descrição |
 |---|---|
-| `GET /api/health` | status do banco e do LLM |
+| `GET /api/health` | status do banco |
 | `GET /api/stats` | contagem por tabela |
 | `GET /api/symbols` | mapa `{ "{W}": svg_uri, … }` (símbolos oficiais) |
 | `GET /api/cards?q=&colors=&limit=` | busca de cartas por nome/texto |
 | `GET /api/cards/{id}` | detalhe da carta (+ rulings) |
 | `GET /api/commanders` · `…/recommend` · `…/suggest` | lista / recomenda por tema / sugere cartas |
 | `GET /api/combos?card=` · `?identity=` | combos por carta ou por identidade |
-| `POST /api/chat` | pergunta ao cérebro `{ "question": "…" }` |
+| `GET /api/fx/usd-brl` | cotação USD→BRL (cache, com fallback) |
+| `POST /api/decks/import` | importa decklist colada `{ name, text, commander? }` |
 | `POST /api/decks` · `GET /api/decks` · `GET /api/decks/{id}` · `DELETE /api/decks/{id}` | CRUD de decks |
 | `POST /api/decks/{id}/cards` · `DELETE …?name=` | adiciona / remove carta |
 | `GET /api/decks/{id}/analysis` | análise completa do deck |
@@ -171,16 +171,15 @@ Construir um deck realmente bom exige **julgamento** — entender o motor do com
 
 ```
 mtg_brain/
-  cli.py            # CLI (init-db / ingest / stats / ask)
-  config.py db.py http.py
-  brain.py          # LLM + RAG por tool use (run_sql somente-leitura)
-  queries.py        # SQL determinístico: busca, análise, bracket
+  cli.py            # CLI (init-db / ingest / stats)
+  config.py db.py http.py fx.py
+  queries.py        # SQL determinístico: busca, análise, bracket, rank, importador
   ingest/           # scryfall.py · combos.py · rules.py
   api/app.py        # FastAPI + serve o frontend
 db/                 # schema.sql · schema_deck.sql
 web/                # React + TS + Vite + Tailwind
-  src/pages/        # CommandersPage · CardsPage · DecksPage · ChatPage
-  src/components/   # Mana (símbolos oficiais) · DeckAnalysis · CommanderCard …
+  src/pages/        # CommandersPage · CardsPage · DecksPage
+  src/components/   # Mana · DeckAnalysis · CommanderPicker · DeckImporter · CommanderCard …
 docs/               # ARCHITECTURE.md · img/
 ```
 
@@ -190,9 +189,9 @@ docs/               # ARCHITECTURE.md · img/
 
 - **Fase 1 — Ingestão** ✅
 - **Fase 2 — Banco consultável** ✅
-- **Fase 3 — Cérebro (RAG via tool use)** ✅
-- **Fase 4 — App web + deckbuilder + análise** ✅
-- **Próximo:** geração/otimização de deck via LLM (chat/Claude Code); preços multi-fonte (USD/EUR/MTGO) + USD/BRL; busca semântica (pgvector); todas as impressões/artes com seletor de versão.
+- **Fase 3 — Inteligência via MCP (Claude Code)** ✅
+- **Fase 4 — App web: deckbuilder, análise, preços, rank, importador/export** ✅
+- **Próximo:** geração/otimização de deck via Claude Code; busca semântica (pgvector); todas as impressões/artes com seletor de versão.
 
 ## Notas e atribuição
 

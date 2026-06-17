@@ -7,7 +7,7 @@ Documento técnico de referência. Para visão geral e setup, veja o [README](..
 2. [Modelo de dados](#modelo-de-dados)
 3. [Ingestão (ETL)](#ingestão-etl)
 4. [Camada de consulta determinística](#camada-de-consulta-determinística)
-5. [O cérebro: RAG por tool use](#o-cérebro-rag-por-tool-use)
+5. [Inteligência via MCP (Claude Code)](#inteligência-via-mcp-claude-code)
 6. [Geração de deck (decisão de arquitetura)](#geração-de-deck-decisão-de-arquitetura)
 7. [API + frontend](#api--frontend)
 8. [Decisões e trade-offs](#decisões-e-trade-offs)
@@ -17,19 +17,20 @@ Documento técnico de referência. Para visão geral e setup, veja o [README](..
 ## Camadas
 
 ```
-ingest → Postgres → (queries.py | brain.py) → FastAPI → React
+ingest → Postgres → queries.py → FastAPI → React
+                   ↘ servidor MCP → Claude Code (linguagem natural → SQL)
 ```
 
 Cada camada tem uma responsabilidade única:
 
 - **ingest/** — baixa e normaliza dados externos. Não sabe nada sobre HTTP/UI.
 - **Postgres** — a fonte única de verdade.
-- **queries.py** — toda lógica de negócio *determinística* (busca, análise de deck, cálculo de bracket). Sem LLM, sem rede. Fácil de testar.
-- **brain.py** — a única parte que usa LLM. Conversa livre.
-- **api/app.py** — fina camada HTTP por cima de queries/brain; também serve o frontend.
+- **queries.py** — toda lógica de negócio *determinística* (busca, análise de deck, cálculo de bracket). Sem rede. Fácil de testar.
+- **api/app.py** — fina camada HTTP por cima de queries; também serve o frontend.
 - **web/** — SPA em React, consome `/api`.
+- **MCP (Postgres)** — expõe o banco ao Claude Code para perguntas em linguagem natural (read-only).
 
-A separação importa: a maior parte do app (busca, deck, análise) é **determinística e auditável**. O LLM só entra no chat. Isso torna o sistema previsível e barato.
+A separação importa: o app inteiro é **determinístico e auditável**. A parte de I.A. (linguagem natural) fica fora do app, no Claude Code via MCP — o app não embute LLM nenhum. Isso torna o sistema previsível e barato.
 
 ---
 
@@ -98,19 +99,19 @@ Calcula, só com heurísticas sobre o texto da carta:
 
 ---
 
-## O cérebro: RAG por tool use
+## Inteligência via MCP (Claude Code)
 
-`brain.py`. Em vez de embeddings, o LLM recebe **uma ferramenta**: `run_sql(query)`.
+A parte de "perguntar em linguagem natural" **não vive no app** — ela é delegada ao **Claude Code** através de um servidor **MCP** de Postgres (`@modelcontextprotocol/server-postgres`) apontado para o banco do mtg-brain.
 
 ```
-usuário → LLM → (decide rodar SQL) → run_sql() → Postgres → linhas → LLM → resposta
+usuário → Claude Code → (MCP) consulta SQL no Postgres → linhas → resposta citando cartas/combos/regras
 ```
 
-- Cliente compatível com **OpenAI** apontando para o Ollama local (`/v1`).
-- `run_sql` é **somente-leitura**: aceita só `SELECT`/`WITH`, abre a conexão como `read_only`, e aplica `SET LOCAL statement_timeout = 15s`.
-- O *system prompt* proíbe o modelo de narrar o SQL para o usuário — ele responde em português citando cartas/regras.
+- Conecta uma vez: `claude mcp add mtg-brain -s user -- npx -y @modelcontextprotocol/server-postgres "postgresql://mtg:mtg@localhost:5432/mtg"`.
+- O acesso é **read-only** (o conector de Postgres do MCP abre transações somente-leitura).
+- **US$ 0 e sem LLM local:** o modelo é o próprio Claude Code; não há Ollama nem dependência de GPU.
 
-**Por que tool use e não pgvector?** Para perguntas estruturadas (“comandantes UB de dreno até US$5”, “combos com Gravecrawler”), traduzir para SQL é mais **preciso e auditável** que recuperar trechos por similaridade. Busca semântica (pgvector) faz sentido para texto de regra em linguagem natural — fica no roadmap, complementar, não substituto.
+**Histórico / decisão:** uma versão anterior embutia um chat no app com LLM local (Ollama, via uma ferramenta `run_sql`). Foi **removida** — o modelo local (14b) não tinha qualidade suficiente e consumia disco/RAM. Tradução de pergunta → SQL para dados estruturados ("comandantes UB de dreno até US$5", "combos com Gravecrawler") é mais **precisa e auditável** que busca por similaridade; e fazê-la via Claude Code dá qualidade real sem custo. Busca semântica de texto de regra (pgvector) fica no roadmap, complementar.
 
 ---
 
@@ -129,7 +130,7 @@ Mas uma auditoria honesta (inclusive um agente cético independente) concluiu qu
 
 Conclusão: produzia um *“goodstuff”* legal, **não** um deck afinado em torno do plano de jogo do comandante. Como construir um bom deck exige **julgamento** (entender o motor, definir a vitória, casar peças com o plano), isso é trabalho de **I.A./LLM**, não de fórmula.
 
-Por isso o gerador determinístico foi **removido**, e a geração/otimização de deck é delegada ao **cérebro** — o chat (LLM) ou o Claude Code com acesso ao banco via MCP, que lê o deck atual, entende o plano e completa/otimiza. O app web foca no que faz bem de forma **determinística e auditável**: dados, busca, **seletor de comandante**, construção manual e análise.
+Por isso o gerador determinístico foi **removido**, e a geração/otimização de deck é delegada ao **Claude Code** (via MCP, com acesso read-only ao banco), que lê o deck atual, entende o plano e completa/otimiza. O app web foca no que faz bem de forma **determinística e auditável**: dados, busca, **seletor de comandante**, construção manual, análise e importação/exportação.
 
 > Lição de engenharia: vale construir o baseline determinístico, **medir com honestidade** e então decidir a fronteira entre o que é fórmula e o que é I.A. — em vez de fingir que uma fórmula “gera decks bons”.
 
@@ -139,7 +140,7 @@ Por isso o gerador determinístico foi **removido**, e a geração/otimização 
 
 - **FastAPI** (`api/app.py`): rotas sob `/api` num `APIRouter`. CORS liberado só para o dev server do Vite. Em produção monta `web/dist` em `/assets` e tem um *catch-all* GET que devolve `index.html` (fallback de SPA) com proteção contra *path traversal*.
 - **React + TS + Vite + Tailwind v4** (tokens de tema via `@theme`, fonte *Cinzel* para o clima épico).
-- **TanStack Query** para data fetching/cache; **react-router** para as 4 telas.
+- **TanStack Query** para data fetching/cache; **react-router** para as 3 telas (Comandantes, Cartas, Decks).
 - **Símbolos de mana** (`components/Mana.tsx`): busca `/api/symbols` (cache infinito) e tokeniza `{...}` no texto/custo, trocando por `<img>` do SVG oficial.
 
 ---
@@ -149,8 +150,7 @@ Por isso o gerador determinístico foi **removido**, e a geração/otimização 
 | Decisão | Por quê | Trade-off |
 |---|---|---|
 | JSON Scryfall inteiro no `cards` | nunca perder atributo; consultar depois | tabela maior |
-| RAG por tool use (SQL) | preciso/auditável p/ dados estruturados | não cobre similaridade semântica (→ pgvector depois) |
-| LLM local (Ollama) | US$ 0, privado, ilimitado | mais lento que API paga; precisa de GPU decente |
-| Geração de deck via LLM, não fórmula | qualidade real: plano de jogo + sinergia | fora do app determinístico; precisa de modelo forte |
+| Linguagem natural via MCP + Claude Code (não LLM embutido) | qualidade real, US$ 0, sem GPU; SQL preciso/auditável | precisa do Claude Code conectado; sem chat dentro do app |
+| Geração/otimização de deck via Claude Code | qualidade real: plano de jogo + sinergia | fora do app determinístico |
 | Mesma origem (API serve o SPA) | deploy simples, sem CORS em prod | rebuild do front a cada release |
 | Básicos = grátis no preço | realismo (você já os tem) | preço ignora básicos premium |

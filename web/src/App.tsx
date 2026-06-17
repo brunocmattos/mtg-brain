@@ -1,5 +1,4 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
-import ChatPage from './pages/ChatPage'
 import CommandersPage from './pages/CommandersPage'
 import CardsPage from './pages/CardsPage'
 import DecksPage from './pages/DecksPage'
@@ -14,7 +13,6 @@ export default function App() {
             <Tab to="/commanders" label="Comandantes" />
             <Tab to="/cards" label="Cartas" />
             <Tab to="/decks" label="Decks" />
-            <Tab to="/chat" label="Conversar" />
           </nav>
         </div>
       </header>
@@ -24,7 +22,6 @@ export default function App() {
           <Route path="/commanders" element={<CommandersPage />} />
           <Route path="/cards" element={<CardsPage />} />
           <Route path="/decks" element={<DecksPage />} />
-          <Route path="/chat" element={<ChatPage />} />
         </Routes>
       </main>
     </div>
