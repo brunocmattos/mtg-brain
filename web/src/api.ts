@@ -65,6 +65,8 @@ export interface DeckCardRow {
   mana_cost: string | null
   color_identity: string[] | null
   usd: number | null
+  eur: number | null
+  tix: number | null
   image: string | null
   art_crop: string | null
 }
@@ -104,8 +106,15 @@ export interface DeckAnalysisData {
   game_changers: string[]
   health: { lands: Health; ramp: Health; draw: Health; interaction: Health }
   price_usd: number
+  price_eur: number
+  price_tix: number
   missing_price: string[]
   combos_present: DeckCombo[]
+}
+
+export interface FxRate {
+  rate: number
+  source: string
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -209,4 +218,5 @@ export const api = {
   suggest: (commander: string) =>
     get<CardSummary[]>(`/commanders/suggest?commander=${encodeURIComponent(commander)}&limit=30`),
   symbols: () => get<Record<string, string>>('/symbols'),
+  fx: () => get<FxRate>('/fx/usd-brl'),
 }

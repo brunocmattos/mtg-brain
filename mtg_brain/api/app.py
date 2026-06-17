@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .. import brain, config, db, http, queries
+from .. import brain, config, db, fx, http, queries
 
 app = FastAPI(
     title="mtg-brain",
@@ -55,6 +55,12 @@ def health():
 @api.get("/stats")
 def stats():
     return db.counts()
+
+
+@api.get("/fx/usd-brl")
+def fx_usd_brl():
+    rate, source = fx.usd_to_brl()
+    return {"rate": rate, "source": source}
 
 
 @api.get("/symbols")

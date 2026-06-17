@@ -1,5 +1,34 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '../api'
 import type { DeckAnalysisData, DeckCombo, Health } from '../api'
+
+const usd = (v: number) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const eur = (v: number) => v.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
+
+// bandeiras em SVG (emoji de bandeira não renderiza no Windows)
+const FLAG = 'inline-block h-3.5 w-5 rounded-[2px] border border-black/30 align-middle'
+function UsFlag() {
+  return (
+    <svg viewBox="0 0 30 20" className={FLAG} aria-label="USD">
+      <rect width="30" height="20" fill="#b22234" />
+      <rect y="2.857" width="30" height="2.857" fill="#fff" />
+      <rect y="8.571" width="30" height="2.857" fill="#fff" />
+      <rect y="14.285" width="30" height="2.857" fill="#fff" />
+      <rect width="12" height="11.43" fill="#3c3b6e" />
+    </svg>
+  )
+}
+function BrFlag() {
+  return (
+    <svg viewBox="0 0 30 20" className={FLAG} aria-label="BRL">
+      <rect width="30" height="20" fill="#009b3a" />
+      <polygon points="15,2 28,10 15,18 2,10" fill="#fedf00" />
+      <circle cx="15" cy="10" r="4.2" fill="#002776" />
+    </svg>
+  )
+}
 
 const CURVE_KEYS = ['0', '1', '2', '3', '4', '5', '6', '7+']
 const PIP: Record<string, string> = {
@@ -111,11 +140,20 @@ function ComboItem({ c }: { c: DeckCombo }) {
 
 export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisData }) {
   const comp = a.completeness
+  const { data: fx } = useQuery({ queryKey: ['fx-usd-brl'], queryFn: api.fx, staleTime: 6 * 3600 * 1000 })
+  const rate = fx?.rate ?? 5.4
   return (
     <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-start justify-between">
         <h3 className="font-semibold">Análise</h3>
-        <span className="text-accent text-lg font-semibold">${a.price_usd.toFixed(2)}</span>
+        <div className="text-right leading-tight">
+          <div className="text-accent text-lg font-semibold flex items-center justify-end gap-1.5"><UsFlag /> {usd(a.price_usd)}</div>
+          <div className="text-sm text-muted flex items-center justify-end gap-1.5"><BrFlag /> {brl(a.price_usd * rate)}</div>
+        </div>
+      </div>
+      <div className="-mt-3 text-right text-[10px] text-muted" title="preços por fonte (terrenos básicos não contam)">
+        TCGplayer {usd(a.price_usd)} · Cardmarket {eur(a.price_eur)} · MTGO {a.price_tix.toFixed(2)} tix
+        {fx?.source === 'fallback' ? ' · câmbio aprox.' : ''}
       </div>
 
       {/* identidade + completude */}

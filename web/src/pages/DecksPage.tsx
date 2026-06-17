@@ -136,6 +136,15 @@ function deckToText(deck: Deck): string {
   return [...cmd, ...rest].map((c) => `${c.qty} ${c.name}`).join('\n') + '\n'
 }
 
+// tooltip com os 3 preços (TCGplayer USD / Cardmarket EUR / MTGO tix)
+function priceTip(c: DeckCardRow): string {
+  const parts: string[] = []
+  if (c.usd != null) parts.push(`US$ ${c.usd.toFixed(2)}`)
+  if (c.eur != null) parts.push(`€ ${c.eur.toFixed(2)}`)
+  if (c.tix != null) parts.push(`${c.tix.toFixed(2)} tix`)
+  return parts.length ? parts.join('  ·  ') : 'sem preço'
+}
+
 function downloadText(filename: string, text: string) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -172,7 +181,7 @@ function CardLine({
       </button>
       <span className="flex items-center gap-2 text-xs text-muted shrink-0 pl-2">
         <ManaCost cost={c.mana_cost} />
-        <span>{c.usd != null ? `$${c.usd.toFixed(2)}` : '—'}</span>
+        <span title={priceTip(c)} className="cursor-help">{c.usd != null ? `$${c.usd.toFixed(2)}` : '—'}</span>
         {!c.is_commander && (
           <button onClick={onRemove} className="hover:text-red-400" title="remover">✕</button>
         )}
@@ -195,6 +204,7 @@ function CardTile({
   return (
     <div
       className="group relative rounded-lg overflow-hidden border border-border bg-surface-2"
+      title={priceTip(c)}
       onMouseEnter={() => onHover(c.image)}
       onMouseLeave={() => onHover(null)}
     >

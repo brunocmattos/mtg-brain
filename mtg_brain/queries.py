@@ -344,11 +344,12 @@ def _deck_cards(deck_id):
     return _rows(f"""
         SELECT dc.card_name AS name, dc.qty, dc.is_commander, c.id::text AS id,
                c.type_line, c.cmc, c.mana_cost, c.color_identity, c.oracle_text,
-               c.usd, c.image, c.art_crop
+               c.usd, c.eur, c.tix, c.image, c.art_crop
         FROM deck_cards dc
         LEFT JOIN LATERAL (
             SELECT id, type_line, cmc, mana_cost, color_identity, oracle_text,
-                   (prices->>'usd')::numeric AS usd, {_img('normal')} AS image,
+                   (prices->>'usd')::numeric AS usd, (prices->>'eur')::numeric AS eur,
+                   (prices->>'tix')::numeric AS tix, {_img('normal')} AS image,
                    {_img('art_crop')} AS art_crop
             FROM cards WHERE name = dc.card_name
             ORDER BY (prices->>'usd')::numeric ASC NULLS LAST LIMIT 1
@@ -524,7 +525,7 @@ def deck_analysis(deck_id):
     curve["7+"] = 0
     lands = ramp = draw = interaction = 0
     cmc_sum = cmc_n = 0
-    price = 0.0
+    price = price_eur = price_tix = 0.0
     missing_price, pool = [], []
     for r in cards:
         q = r["qty"] or 1
@@ -548,10 +549,15 @@ def deck_analysis(deck_id):
             interaction += q
         if r["name"] in BASIC_LAND_NAMES:
             pass  # básicos não contam no preço
-        elif r["usd"] is not None:
-            price += float(r["usd"]) * q
         else:
-            missing_price.append(r["name"])
+            if r["usd"] is not None:
+                price += float(r["usd"]) * q
+            else:
+                missing_price.append(r["name"])
+            if r.get("eur") is not None:
+                price_eur += float(r["eur"]) * q
+            if r.get("tix") is not None:
+                price_tix += float(r["tix"]) * q
         pool.append(r["name"])
     predominant = max((t for t in types if t != "land"), key=lambda k: types[k], default=None)
     combos_present = combos_in_deck(pool)
@@ -592,6 +598,8 @@ def deck_analysis(deck_id):
             "interaction": {"value": interaction, "status": _flag(interaction, 6), "alvo": "8-10"},
         },
         "price_usd": round(price, 2),
+        "price_eur": round(price_eur, 2),
+        "price_tix": round(price_tix, 2),
         "missing_price": missing_price,
         "combos_present": combos_present,
     }
