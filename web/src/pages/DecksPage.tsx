@@ -4,6 +4,7 @@ import { api } from '../api'
 import type { CardSummary, DeckCardRow, Deck } from '../api'
 import DeckAnalysis from '../components/DeckAnalysis'
 import CommanderPicker from '../components/CommanderPicker'
+import DeckImporter from '../components/DeckImporter'
 import { ManaCost } from '../components/Mana'
 
 export default function DecksPage() {
@@ -21,6 +22,7 @@ function DeckList({ onOpen }: { onOpen: (id: number) => void }) {
   const [name, setName] = useState('')
   const [cmd, setCmd] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const create = useMutation({
     mutationFn: () => {
       const c = cmd.trim()
@@ -62,6 +64,11 @@ function DeckList({ onOpen }: { onOpen: (id: number) => void }) {
         <p className="text-muted text-xs mt-2">
           O comandante define a identidade de cor do deck. Sem comandante, cria um deck vazio só com nome.
         </p>
+        <div className="mt-3 border-t border-border pt-3">
+          <button type="button" onClick={() => setImportOpen(true)} className="text-sm text-muted hover:text-accent">
+            ⇪ Importar decklist (Moxfield / Archidekt / texto)
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -89,6 +96,16 @@ function DeckList({ onOpen }: { onOpen: (id: number) => void }) {
             setCmd(n)
             if (!name.trim()) setName(n)
             setPickerOpen(false)
+          }}
+        />
+      )}
+
+      {importOpen && (
+        <DeckImporter
+          onClose={() => setImportOpen(false)}
+          onImported={(deckId) => {
+            setImportOpen(false)
+            onOpen(deckId)
           }}
         />
       )}

@@ -245,6 +245,100 @@ def delete_deck(deck_id):
     return {"ok": True}
 
 
+# ---- Importador de decklist (colar texto do Moxfield/Archidekt/etc.) ----
+
+_CARD_LINE = re.compile(r"^\s*(\d+)\s*[xX]?\s+(.+?)\s*$")
+_SECTION_SKIP = ("sideboard", "maybeboard", "maybe", "considering", "tokens", "token", "outside")
+
+
+def _clean_card_name(name):
+    name = re.sub(r"\s*\([^)]*\)\s*\S*\s*$", "", name)  # tira " (SET) 123" do fim
+    name = re.sub(r"\s*\*[A-Za-z]\*\s*$", "", name)      # tira marcador de foil "*F*"
+    name = re.sub(r"\s+#\d+\s*$", "", name)              # tira "#123" do fim
+    return name.strip()
+
+
+def _parse_decklist(text):
+    """Lê uma decklist em texto (Moxfield/Archidekt/MTGGoldfish/etc.) -> [{qty,name,is_commander}].
+
+    Entende linhas "1 Card", "1x Card", "1 Card (SET) 123 *F*" e cabeçalhos de seção
+    (usa "Commander" pra marcar o comandante; ignora sideboard/maybeboard)."""
+    items, section = [], "main"
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("//") or line.startswith("#"):
+            continue
+        m = _CARD_LINE.match(line)
+        if not m:  # cabeçalho de seção
+            low = line.lower()
+            if "commander" in low:
+                section = "commander"
+            elif any(s in low for s in _SECTION_SKIP):
+                section = "skip"
+            else:
+                section = "main"
+            continue
+        if section == "skip":
+            continue
+        name = _clean_card_name(m.group(2))
+        if name:
+            items.append({"qty": int(m.group(1)), "name": name,
+                          "is_commander": section == "commander"})
+    return items
+
+
+def _resolve_card_name(name):
+    """Casa o nome lido com o nome canônico no banco (exato -> case-insensitive -> face de DFC)."""
+    for sql, val in (
+        ("SELECT name FROM cards WHERE name = %(n)s LIMIT 1", name),
+        ("SELECT name FROM cards WHERE name ILIKE %(n)s ORDER BY edhrec_rank NULLS LAST LIMIT 1", name),
+        ("SELECT name FROM cards WHERE name ILIKE %(n)s ORDER BY edhrec_rank NULLS LAST LIMIT 1", name + " // %"),
+    ):
+        r = _rows(sql, {"n": val})
+        if r:
+            return r[0]["name"]
+    return None
+
+
+def import_deck(deck_name, text, commander=None):
+    """Cria um deck a partir de uma decklist colada. Resolve nomes contra o banco e
+    devolve o que entrou e o que não foi encontrado."""
+    items = _parse_decklist(text)
+    if not items:
+        return {"error": "Não consegui ler nenhuma carta da lista. Cole no formato '1 Nome da Carta'."}
+
+    resolved, missing, seen, cmd_name = [], [], set(), None
+    for it in items:
+        canon = _resolve_card_name(it["name"])
+        if not canon:
+            missing.append(it["name"])
+            continue
+        if canon in seen:
+            continue
+        seen.add(canon)
+        if it["is_commander"] and not cmd_name:
+            cmd_name = canon
+        resolved.append({"name": canon, "qty": it["qty"], "is_commander": it["is_commander"]})
+
+    if not cmd_name and commander:  # comandante explícito (quando o export não marca)
+        cmd_name = _resolve_card_name(commander) or commander
+
+    deck = create_deck(deck_name or "Deck importado", cmd_name)  # comandante já entra
+    for r in resolved:
+        if cmd_name and r["name"] == cmd_name:
+            continue
+        add_card(deck["id"], r["name"], r["qty"], False)
+
+    return {
+        "deck_id": deck["id"],
+        "deck_name": deck["name"],
+        "commander": cmd_name,
+        "added": len(resolved),
+        "total_parsed": len(items),
+        "missing": missing,
+    }
+
+
 def _deck_cards(deck_id):
     # Uma impressão (a mais barata) por nome, via LATERAL — máx ~100 lookups.
     return _rows(f"""

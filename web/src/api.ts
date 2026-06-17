@@ -37,6 +37,15 @@ export interface Combo {
   prerequisites?: string | null
 }
 
+export interface ImportResult {
+  deck_id: number
+  deck_name: string
+  commander: string | null
+  added: number
+  total_parsed: number
+  missing: string[]
+}
+
 export interface DeckSummary {
   id: number
   name: string
@@ -188,6 +197,8 @@ export const api = {
   listDecks: () => get<DeckSummary[]>('/decks'),
   createDeck: (name: string, commander: string | null) =>
     post<DeckSummary>('/decks', { name, commander }),
+  importDeck: (name: string, text: string, commander: string | null) =>
+    post<ImportResult>('/decks/import', { name, text, commander }),
   getDeck: (id: number) => get<Deck>(`/decks/${id}`),
   deleteDeck: (id: number) => del<{ ok: boolean }>(`/decks/${id}`),
   addCard: (id: number, card_name: string, is_commander = false) =>

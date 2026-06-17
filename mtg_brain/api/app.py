@@ -127,9 +127,23 @@ class DeckCardBody(BaseModel):
     is_commander: bool = False
 
 
+class DeckImport(BaseModel):
+    name: str
+    text: str
+    commander: str | None = None
+
+
 @api.post("/decks")
 def create_deck(body: DeckCreate):
     return queries.create_deck(body.name, body.commander)
+
+
+@api.post("/decks/import")
+def import_deck(body: DeckImport):
+    res = queries.import_deck(body.name, body.text, body.commander)
+    if "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
 
 @api.get("/decks")
