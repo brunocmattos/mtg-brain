@@ -88,7 +88,10 @@ function ManaCurve({ curve }: { curve: Record<string, number> }) {
 
 function Stat({ label, h }: { label: string; h: Health }) {
   const color =
-    h.status === 'ok' ? 'text-green-400' : h.status === 'baixo' ? 'text-amber-400' : 'text-sky-400'
+    h.status === 'ok' ? 'text-green-400'
+      : h.status === 'baixo' ? 'text-amber-400'
+        : h.status === 'alto' ? 'text-red-400'
+          : 'text-sky-400'
   return (
     <div className="bg-surface-2 rounded p-2">
       <div className="text-[11px] text-muted">{label}</div>

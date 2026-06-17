@@ -42,8 +42,10 @@ export interface ImportResult {
   deck_name: string
   commander: string | null
   added: number
+  total_cards: number
   total_parsed: number
   missing: string[]
+  over_limit: boolean
 }
 
 export interface DeckSummary {

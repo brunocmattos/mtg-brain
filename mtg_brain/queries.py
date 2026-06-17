@@ -234,8 +234,15 @@ def add_card(deck_id, card_name, qty=1, is_commander=False):
 
 
 def remove_card(deck_id, card_name):
-    _write("DELETE FROM deck_cards WHERE deck_id=%(d)s AND card_name=%(n)s",
-           {"d": deck_id, "n": card_name})
+    # Remove UMA cópia (simétrico ao add +1): qty>1 decrementa, qty<=1 apaga a linha.
+    # (antes apagava todas as cópias de uma vez — perda de dado em básicos com qty alto.)
+    _write("""
+        WITH dec AS (
+            UPDATE deck_cards SET qty = qty - 1
+            WHERE deck_id=%(d)s AND card_name=%(n)s AND qty > 1
+        )
+        DELETE FROM deck_cards WHERE deck_id=%(d)s AND card_name=%(n)s AND qty <= 1
+    """, {"d": deck_id, "n": card_name})
     return {"ok": True}
 
 
@@ -252,9 +259,11 @@ _SECTION_SKIP = ("sideboard", "maybeboard", "maybe", "considering", "tokens", "t
 
 
 def _clean_card_name(name):
-    name = re.sub(r"\s*\([^)]*\)\s*\S*\s*$", "", name)  # tira " (SET) 123" do fim
-    name = re.sub(r"\s*\*[A-Za-z]\*\s*$", "", name)      # tira marcador de foil "*F*"
-    name = re.sub(r"\s+#\d+\s*$", "", name)              # tira "#123" do fim
+    # ORDEM IMPORTA: tira foil/#num PRIMEIRO; só então " (SET) 123" (ancorado no fim),
+    # senão o "*F*" no fim impede o strip do set e a carta vira 'missing'.
+    name = re.sub(r"\s*\*[A-Za-z]\*\s*$", "", name)      # marcador de foil/etched "*F*"
+    name = re.sub(r"\s+#\d+\s*$", "", name)              # "#123" do fim
+    name = re.sub(r"\s*\([^)]*\)\s*\S*\s*$", "", name)   # " (SET) 123" do fim
     return name.strip()
 
 
@@ -271,10 +280,10 @@ def _parse_decklist(text):
         m = _CARD_LINE.match(line)
         if not m:  # cabeçalho de seção
             low = line.lower()
-            if "commander" in low:
-                section = "commander"
-            elif any(s in low for s in _SECTION_SKIP):
+            if any(s in low for s in _SECTION_SKIP):
                 section = "skip"
+            elif re.match(r"^commanders?\b\s*\(?\s*\d*\s*\)?$", low):
+                section = "commander"  # estrito: "Commander" / "Commanders (1)" — NÃO "Commander Staples"
             else:
                 section = "main"
             continue
@@ -288,15 +297,23 @@ def _parse_decklist(text):
 
 
 def _resolve_card_name(name):
-    """Casa o nome lido com o nome canônico no banco (exato -> case-insensitive -> face de DFC)."""
-    for sql, val in (
-        ("SELECT name FROM cards WHERE name = %(n)s LIMIT 1", name),
-        ("SELECT name FROM cards WHERE name ILIKE %(n)s ORDER BY edhrec_rank NULLS LAST LIMIT 1", name),
-        ("SELECT name FROM cards WHERE name ILIKE %(n)s ORDER BY edhrec_rank NULLS LAST LIMIT 1", name + " // %"),
-    ):
-        r = _rows(sql, {"n": val})
-        if r:
-            return r[0]["name"]
+    """Casa o nome lido com o nome canônico no banco: exato -> igualdade case-insensitive
+    -> face de DFC. Prefere impressão real (layout<>'token') e NÃO usa o nome do usuário
+    como padrão LIKE (evita que '_'/'%' virem curinga e resolvam carta errada)."""
+    r = _rows("SELECT name FROM cards WHERE name = %(n)s "
+              "ORDER BY (layout='token') LIMIT 1", {"n": name})
+    if r:
+        return r[0]["name"]
+    r = _rows("SELECT name FROM cards WHERE lower(name) = lower(%(n)s) "
+              "ORDER BY (layout='token'), edhrec_rank NULLS LAST LIMIT 1", {"n": name})
+    if r:
+        return r[0]["name"]
+    # DFC: nome só do front -> casa "front // back" (escapa curingas do nome do usuário)
+    esc = name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    r = _rows("SELECT name FROM cards WHERE name ILIKE %(n)s ESCAPE '\\' "
+              "ORDER BY (layout='token'), edhrec_rank NULLS LAST LIMIT 1", {"n": esc + " // %"})
+    if r:
+        return r[0]["name"]
     return None
 
 
@@ -307,35 +324,43 @@ def import_deck(deck_name, text, commander=None):
     if not items:
         return {"error": "Não consegui ler nenhuma carta da lista. Cole no formato '1 Nome da Carta'."}
 
-    resolved, missing, seen, cmd_name = [], [], set(), None
+    # ACUMULA qty por nome (linhas repetidas somam, não descartam) preservando a ordem.
+    missing, cmd_name = [], None
+    agg, order = {}, []
     for it in items:
         canon = _resolve_card_name(it["name"])
         if not canon:
             missing.append(it["name"])
             continue
-        if canon in seen:
-            continue
-        seen.add(canon)
-        if it["is_commander"] and not cmd_name:
-            cmd_name = canon
-        resolved.append({"name": canon, "qty": it["qty"], "is_commander": it["is_commander"]})
+        if canon not in agg:
+            agg[canon] = {"name": canon, "qty": 0, "is_commander": False}
+            order.append(canon)
+        agg[canon]["qty"] += it["qty"]
+        if it["is_commander"]:
+            agg[canon]["is_commander"] = True
+            if not cmd_name:
+                cmd_name = canon
+    resolved = [agg[c] for c in order]
 
     if not cmd_name and commander:  # comandante explícito (quando o export não marca)
         cmd_name = _resolve_card_name(commander) or commander
 
-    deck = create_deck(deck_name or "Deck importado", cmd_name)  # comandante já entra
+    deck = create_deck(deck_name or "Deck importado", cmd_name)  # comandante já entra (qty 1)
     for r in resolved:
         if cmd_name and r["name"] == cmd_name:
             continue
         add_card(deck["id"], r["name"], r["qty"], False)
 
+    total = sum(r["qty"] for r in resolved) + (1 if cmd_name and cmd_name not in agg else 0)
     return {
         "deck_id": deck["id"],
         "deck_name": deck["name"],
         "commander": cmd_name,
         "added": len(resolved),
+        "total_cards": total,
         "total_parsed": len(items),
         "missing": missing,
+        "over_limit": total > 100,  # Commander = 100; avisa sem truncar a lista colada
     }
 
 

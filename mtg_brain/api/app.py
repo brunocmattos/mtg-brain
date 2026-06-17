@@ -192,6 +192,8 @@ if os.path.isdir(_DIST):
         if full_path.startswith("api"):
             raise HTTPException(status_code=404, detail="rota de API não encontrada")
         candidate = os.path.abspath(os.path.join(_DIST, full_path))
-        if full_path and candidate.startswith(os.path.abspath(_DIST)) and os.path.isfile(candidate):
+        base = os.path.abspath(_DIST)
+        within = candidate == base or candidate.startswith(base + os.sep)  # separador evita prefix-collision
+        if full_path and within and os.path.isfile(candidate):
             return FileResponse(candidate)
         return FileResponse(os.path.join(_DIST, "index.html"))

@@ -44,7 +44,8 @@ export default function DeckImporter({
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div
         role="dialog"
         aria-modal="true"
@@ -60,9 +61,14 @@ export default function DeckImporter({
         {res ? (
           <div className="space-y-3 overflow-y-auto p-4">
             <p className="text-green-400">
-              ✓ {res.added} cartas importadas em <span className="font-medium">{res.deck_name}</span>
+              ✓ {res.added} cartas importadas em <span className="font-medium">{res.deck_name}</span> ({res.total_cards} no total)
               {res.commander ? <> · comandante: <span className="text-accent">{res.commander}</span></> : ''}
             </p>
+            {res.over_limit && (
+              <div className="rounded-md border border-amber-500/40 bg-surface p-3 text-sm text-amber-400">
+                O deck ficou com {res.total_cards} cartas (Commander = 100). Confira a lista.
+              </div>
+            )}
             {res.missing.length > 0 && (
               <div className="rounded-md border border-amber-500/40 bg-surface p-3 text-sm">
                 <div className="mb-1 text-amber-400">{res.missing.length} carta(s) não encontrada(s) no banco:</div>

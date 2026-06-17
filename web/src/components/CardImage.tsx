@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 // Cartas dupla-face têm image NULL no topo; o backend já cai pro card_faces.
 // A imagem é exibida no aspecto NATURAL (h-auto) — nada de forçar aspect-ratio,
@@ -13,6 +13,7 @@ export default function CardImage({
   className?: string
 }) {
   const [err, setErr] = useState(false)
+  useEffect(() => setErr(false), [src]) // novo src -> limpa erro anterior
   if (!src || err) {
     return (
       <div

@@ -83,7 +83,7 @@ export default function CardDetailModal({
   return (
     <div
       className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-20"
-      onClick={onClose}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
         className="bg-surface border border-border rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"

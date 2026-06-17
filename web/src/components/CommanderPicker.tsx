@@ -73,7 +73,8 @@ export default function CommanderPicker({
   const pickedVisible = !!picked && filtered.some((c) => c.id === picked.id)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div
         role="dialog"
         aria-modal="true"
