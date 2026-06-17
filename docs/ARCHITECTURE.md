@@ -86,7 +86,7 @@ Calcula, só com heurísticas sobre o texto da carta:
 - **saúde**: terrenos, ramp (`add {…}`, *search … land*), compra (regex `draws? \w+ cards?`), interação (destroy/exile/counter/return);
 - **completude**: 100 cartas? tem comandante? cartas fora da identidade?
 - **bracket** (ver abaixo);
-- **preço multi-fonte** (ManaPool/TCGplayer/Cardmarket/MTGO somados por carta; básicos contam como grátis — a tabela é oracle-cards e o Swamp vem marcado ~US$2, o que inflaria tudo; o front escolhe a fonte e converte USD→BRL via `/api/fx/usd-brl`);
+- **preço multi-fonte** (ManaPool/TCGplayer/Cardmarket/MTGO somados por carta; básicos contam como grátis — a tabela é oracle-cards e o Swamp vem marcado ~US$2, o que inflaria tudo; o front escolhe a fonte e converte USD→BRL via `/api/fx/usd-brl`). Devolve **valor atual** (`price_usd/eur/tix`, honrando a arte escolhida via `COALESCE(printing, base)`) **e valor base** (`price_*_base` = soma da impressão mais barata de cada carta). ManaPool é indexado por *nome* (já o mais barato), então nessa fonte base = atual e trocar arte não muda o total;
 - **rank de Poder & Consistência** (heurístico, 0–100 sobre eixos consistência/interação/ameaça — *não* é taxa de vitória; sem log público de partidas, win-rate real é impossível, e isso é dito explicitamente na UI);
 - **o que falta** (`_deck_gaps`): aponta lacunas com severidade (alto/médio/baixo) — ex.: pouca interação em **velocidade de instante**, sem wipes, sem counters, ramp/compra abaixo do saudável;
 - **combos presentes**: `card_names <@ deck_names` via índice GIN.

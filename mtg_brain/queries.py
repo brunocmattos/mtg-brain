@@ -417,6 +417,7 @@ def _deck_cards(deck_id):
                COALESCE((dc.printing->>'usd')::numeric, p.usd) AS usd,
                COALESCE((dc.printing->>'eur')::numeric, p.eur) AS eur,
                COALESCE((dc.printing->>'tix')::numeric, p.tix) AS tix,
+               p.usd AS usd_base, p.eur AS eur_base, p.tix AS tix_base,
                mp.usd AS manapool,
                COALESCE(dc.printing->>'image', c.image) AS image,
                COALESCE(dc.printing->>'art_crop', c.art_crop) AS art_crop,
@@ -720,6 +721,8 @@ def deck_analysis(deck_id):
     wipes = counters = instant_interaction = 0
     cmc_sum = cmc_n = 0
     price = price_eur = price_tix = price_mp = 0.0
+    # valor "base" = impressão mais barata por carta (ignora a arte escolhida); o de cima é o "atual"
+    price_base = price_eur_base = price_tix_base = 0.0
     missing_price, pool = [], []
     for r in cards:
         q = r["qty"] or 1
@@ -762,6 +765,12 @@ def deck_analysis(deck_id):
                 price_tix += float(r["tix"]) * q
             if r.get("manapool") is not None:
                 price_mp += float(r["manapool"]) * q
+            if r.get("usd_base") is not None:
+                price_base += float(r["usd_base"]) * q
+            if r.get("eur_base") is not None:
+                price_eur_base += float(r["eur_base"]) * q
+            if r.get("tix_base") is not None:
+                price_tix_base += float(r["tix_base"]) * q
         pool.append(r["name"])
     predominant = max((t for t in types if t != "land"), key=lambda k: types[k], default=None)
     combos_present = combos_in_deck(pool)
@@ -822,6 +831,10 @@ def deck_analysis(deck_id):
         "price_eur": round(price_eur, 2),
         "price_tix": round(price_tix, 2),
         "price_manapool": round(price_mp, 2),
+        # "base" = soma da impressão mais barata de cada carta (Scryfall); ManaPool já é base por nome
+        "price_usd_base": round(price_base, 2),
+        "price_eur_base": round(price_eur_base, 2),
+        "price_tix_base": round(price_tix_base, 2),
         "missing_price": missing_price,
         "combos_present": combos_present,
     }

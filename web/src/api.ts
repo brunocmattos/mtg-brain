@@ -133,6 +133,9 @@ export interface DeckAnalysisData {
   price_eur: number
   price_tix: number
   price_manapool: number
+  price_usd_base: number
+  price_eur_base: number
+  price_tix_base: number
   missing_price: string[]
   combos_present: DeckCombo[]
 }

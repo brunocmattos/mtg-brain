@@ -160,6 +160,10 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
   const pickSource = (s: string) => { setSource(s); localStorage.setItem('mtg-price-source', s) }
   const sel = SRC.find((s) => s.key === source) ?? SRC[0]
   const amount = ({ manapool: a.price_manapool, usd: a.price_usd, eur: a.price_eur, tix: a.price_tix } as Record<string, number>)[sel.key] ?? 0
+  // "atual" = com as artes escolhidas; "base" = impressão mais barata de cada carta. ManaPool é por nome → base = atual.
+  const amountBase = ({ manapool: a.price_manapool, usd: a.price_usd_base, eur: a.price_eur_base, tix: a.price_tix_base } as Record<string, number>)[sel.key] ?? 0
+  const diff = amount - amountBase
+  const fmtCur = sel.cur === 'usd' ? usd : sel.cur === 'eur' ? eur : (n: number) => `${n.toFixed(2)} tix`
 
   return (
     <div className="space-y-4">
@@ -179,6 +183,15 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
             <div className="text-lg font-semibold text-accent">{eur(amount)}</div>
           ) : (
             <div className="text-lg font-semibold text-accent">{amount.toFixed(2)} tix</div>
+          )}
+          {sel.key === 'manapool' ? (
+            <div className="text-[10px] text-muted" title="ManaPool é um preço por nome de carta (o mais barato), não por edição — trocar a arte não altera esse total.">por nome · já o mais barato (não muda com a arte)</div>
+          ) : diff > 0.005 ? (
+            <div className="text-[10px] text-muted" title="Valor base = somando a impressão mais barata de cada carta. A diferença vem das artes/edições que você escolheu.">
+              base {fmtCur(amountBase)} <span className="text-emerald-400">· +{fmtCur(diff)} nas suas versões</span>
+            </div>
+          ) : (
+            <div className="text-[10px] text-muted" title="Seu deck já está no valor base — nenhuma carta tem uma versão mais cara escolhida.">= base (já o mais barato)</div>
           )}
         </div>
       </div>

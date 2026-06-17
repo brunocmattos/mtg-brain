@@ -20,7 +20,7 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
 - **Montar decks** a partir de um **seletor de comandante** com filtros (cor, CMC, tema), com busca, sugestões por comandante, preview grande da carta no canto, e visualização em **lista** ou **grade de imagens** (estilo Moxfield/Archidekt).
 - **Trocar a versão/arte** de cada carta no deck (botão ⇄) — todas as impressões vêm do Scryfall sob demanda, com a arte e o preço de cada edição.
 - **Analisar o deck**: contagem por tipo, curva de mana, identidade de cor, ramp/compra/interação/terrenos, **bracket** (sistema oficial WotC), **combos presentes**, um **rank de Poder & Consistência** (heurístico, *não* é taxa de vitória) e um indicador de **pontos fracos** ("o que falta": resposta em velocidade de instante, wipes, counters, ramp, compra…).
-- **Preço do deck multi-fonte** com seletor (default **ManaPool**; também TCGplayer, Cardmarket, MTGO) e total em **US$ e R$** com bandeiras.
+- **Preço do deck multi-fonte** com seletor (default **ManaPool**; também TCGplayer, Cardmarket, MTGO) e total em **US$ e R$** com bandeiras, mostrando **valor atual** (com as artes escolhidas) vs **valor base** (impressão mais barata de cada carta) e o quanto suas versões somam.
 - **Importar decklist** (colar do Moxfield/Archidekt) e **exportar** em `.txt` (`<qtd> <nome>`, comandante no topo) — importável no Tabletop Simulator, Moxfield e Archidekt.
 - **Criar deck com I.A.** via a skill **`/deck-creator`** no Claude Code: você dá comandante + bracket + orçamento, ela te questiona o necessário, monta o deck e importa no app pra você avaliar.
 - **Perguntar em linguagem natural** via o **MCP** conectado ao Claude Code (sem LLM local) — ver abaixo.
