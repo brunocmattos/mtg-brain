@@ -18,7 +18,7 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
 - **Buscar comandantes** por tema (`vampire`, `sacrifice`, `mill`…), cor e preço, com a arte oficial das cartas.
 - **Pesquisar qualquer carta** por nome ou texto de regras (`destroy target creature`, `loses life`…).
 - **Montar decks** a partir de um **seletor de comandante** com filtros (cor, CMC, tema), com busca, sugestões por comandante, preview grande da carta no canto, e visualização em **lista** ou **grade de imagens** (estilo Moxfield/Archidekt).
-- **Analisar o deck**: contagem por tipo, curva de mana, identidade de cor, ramp/compra/interação/terrenos, **bracket** (sistema oficial WotC), **combos presentes**, **preço em US$/R$ + 3 fontes** (TCGplayer/Cardmarket/MTGO) e um **rank de Poder & Consistência** (heurístico, *não* é taxa de vitória).
+- **Analisar o deck**: contagem por tipo, curva de mana, identidade de cor, ramp/compra/interação/terrenos, **bracket** (sistema oficial WotC), **combos presentes**, **preço em US$/R$ + 3 fontes** (TCGplayer/Cardmarket/MTGO) e um **rank de Poder & Consistência** (heurístico, *não* é taxa de vitória) e um indicador de **pontos fracos** ("o que falta": resposta em velocidade de instante, wipes, counters, ramp, compra…).
 - **Exportar a decklist** em `.txt` (`<qtd> <nome>`, comandante no topo) — importável no Tabletop Simulator, Moxfield e Archidekt.
 - **Conversar com o cérebro** em português: o LLM consulta o banco e responde citando cartas, combos e regras.
 

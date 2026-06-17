@@ -3,6 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import type { DeckAnalysisData, DeckCombo, Health } from '../api'
 
+const SEV_COLOR: Record<string, string> = {
+  alto: 'text-red-400', medio: 'text-amber-400', baixo: 'text-sky-400', ok: 'text-green-400',
+}
 const usd = (v: number) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const eur = (v: number) => v.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
@@ -233,6 +236,25 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
         <Stat label="Compra" h={a.health.draw} />
         <Stat label="Interação" h={a.health.interaction} />
       </div>
+
+      {a.gaps && a.gaps.length > 0 && (
+        <div>
+          <div className="text-xs text-muted mb-1">O que falta / pontos fracos</div>
+          {a.interaction_detail && (
+            <div className="mb-1.5 text-[10px] text-muted">
+              Interação: {a.interaction_detail.total} total · <span className="text-text">{a.interaction_detail.instant_speed} em velocidade de instante</span> · {a.interaction_detail.wipes} wipes · {a.interaction_detail.counters} counters
+            </div>
+          )}
+          <ul className="space-y-1 text-xs">
+            {a.gaps.map((g, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className={`mt-0.5 leading-none ${SEV_COLOR[g.severity] ?? 'text-muted'}`}>●</span>
+                <span>{g.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div>
         <div className="text-xs text-muted mb-1">Tipos</div>

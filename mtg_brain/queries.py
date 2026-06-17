@@ -421,6 +421,58 @@ def _is_tutor(text):
     return "search your library for a card" in (text or "").lower()
 
 
+def _is_wipe(text):
+    t = (text or "").lower()
+    return "destroy all" in t or "exile all" in t or "destroy each" in t
+
+
+def _is_counter(text):
+    return "counter target" in (text or "").lower()
+
+
+def _is_instant_speed(type_line, text):
+    return "instant" in (type_line or "").lower() or "flash" in (text or "").lower()
+
+
+def _deck_gaps(*, lands, ramp, draw, interaction, wipes, counters,
+               instant_interaction, avg_cmc, identity, complete):
+    """Lista de buracos/pontos fracos do deck, em linguagem direta e acionável.
+    Alvos são guias de Commander (heurística), não regra absoluta."""
+    gaps = []
+
+    def add(sev, text):
+        gaps.append({"severity": sev, "text": text})
+
+    if not complete:
+        add("alto", "Deck incompleto (≠100 cartas) — complete antes de avaliar os buracos.")
+    if instant_interaction < 4:
+        add("alto", f"Só {instant_interaction} resposta(s) em velocidade de instante — é por isso "
+                    "que você fica sem reação no turno dos outros. Mire 5+ (remoção instantânea, "
+                    "proteção, counters).")
+    if interaction < 7:
+        add("alto", f"Pouca interação no total ({interaction}). Mire ~8–10 entre remoção e counters.")
+    if wipes < 2:
+        add("medio", f"Poucos board wipes ({wipes}). 2–3 ajudam a resetar quando o board foge.")
+    if "U" in identity and counters == 0:
+        add("baixo", "Sem counterspells — você joga azul; 2–3 dão resposta proativa a combo/wrath.")
+    if draw < 8:
+        add("medio", f"Compra baixa ({draw}). Mire 10+ pra não ficar sem gás.")
+    if ramp < 9:
+        add("medio", f"Ramp baixo ({ramp}). ~10 acelera o plano.")
+    if lands < 35:
+        add("alto", f"Poucos terrenos ({lands}) — 36–38 é o padrão; menos trava de mana.")
+    elif lands > 40:
+        add("baixo", f"Muitos terrenos ({lands}). Dá pra cortar 1–2 por mais ação.")
+    if avg_cmc > 3.6:
+        add("baixo", f"Curva alta (CMC médio {avg_cmc}). Baixar ajuda a agir mais cedo.")
+    if not gaps:
+        add("ok", "Sem buracos óbvios — interação, ramp, compra e manabase dentro dos alvos.")
+
+    order = {"alto": 0, "medio": 1, "baixo": 2, "ok": 3}
+    gaps.sort(key=lambda g: order.get(g["severity"], 9))
+    return gaps
+
+
 def combos_in_deck(names, limit=60):
     if not names:
         return []
@@ -582,6 +634,7 @@ def deck_analysis(deck_id):
     curve = {str(i): 0 for i in range(7)}
     curve["7+"] = 0
     lands = ramp = draw = interaction = tutors = 0
+    wipes = counters = instant_interaction = 0
     cmc_sum = cmc_n = 0
     price = price_eur = price_tix = 0.0
     missing_price, pool = [], []
@@ -605,6 +658,12 @@ def deck_analysis(deck_id):
             draw += q
         if _is_interaction(r["oracle_text"]):
             interaction += q
+            if _is_instant_speed(r["type_line"], r["oracle_text"]):
+                instant_interaction += q
+        if _is_wipe(r["oracle_text"]):
+            wipes += q
+        if _is_counter(r["oracle_text"]):
+            counters += q
         if _is_tutor(r["oracle_text"]):
             tutors += q
         if r["name"] in BASIC_LAND_NAMES:
@@ -634,9 +693,15 @@ def deck_analysis(deck_id):
     extra_turns = any(_is_extra_turn(r["oracle_text"]) for r in cards)
     two_card_win = sum(1 for c in combos_present if _is_win_combo(c))
     avg_cmc = round(cmc_sum / cmc_n, 2) if cmc_n else 0
+    complete = total == 100
     power = _power_rank(
         lands=lands, ramp=ramp, draw=draw, interaction=interaction, avg_cmc=avg_cmc,
-        combos=len(combos_present), gc=len(gc), tutors=tutors, complete=(total == 100),
+        combos=len(combos_present), gc=len(gc), tutors=tutors, complete=complete,
+    )
+    gaps = _deck_gaps(
+        lands=lands, ramp=ramp, draw=draw, interaction=interaction, wipes=wipes,
+        counters=counters, instant_interaction=instant_interaction, avg_cmc=avg_cmc,
+        identity=identity, complete=complete,
     )
 
     return {
@@ -655,6 +720,11 @@ def deck_analysis(deck_id):
         },
         "bracket": _deck_bracket(gc, two_card_win, mld, extra_turns, len(combos_present)),
         "power": power,
+        "gaps": gaps,
+        "interaction_detail": {
+            "total": interaction, "instant_speed": instant_interaction,
+            "wipes": wipes, "counters": counters,
+        },
         "game_changers": gc,
         # Limiares são guias de Commander (heurística), não regra absoluta.
         "health": {

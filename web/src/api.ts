@@ -110,6 +110,8 @@ export interface DeckAnalysisData {
     note: string | null
     axes: { key: string; label: string; score: number; detail: string }[]
   }
+  gaps: { severity: string; text: string }[]
+  interaction_detail: { total: number; instant_speed: number; wipes: number; counters: number }
   game_changers: string[]
   health: { lands: Health; ramp: Health; draw: Health; interaction: Health }
   price_usd: number
