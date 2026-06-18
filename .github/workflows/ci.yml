@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    name: Lint + Testes (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      # ruff so nos erros serios (sintaxe / nomes indefinidos), nao em estilo —
+      # mantem o CI verde e significativo num projeto que nao foi formatado com ruff.
+      - name: Lint (ruff — erros serios)
+        run: ruff check --select E9,F63,F7,F82 mtg_brain tests
+
+      # Os testes sao de funcao pura (sem banco), entao rodam sem Postgres.
+      - name: Rodar testes
+        run: pytest
+
+  docker-build:
+    name: Build da imagem Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # O Dockerfile copia web/dist (build do front, que e gitignored),
+      # entao o CI precisa gerar o dist antes de buildar a imagem.
+      - name: Build do frontend
+        working-directory: web
+        run: |
+          npm install
+          npm run build
+
+      - name: Build da imagem
+        run: docker build -t mtg-brain:ci .
