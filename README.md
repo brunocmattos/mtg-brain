@@ -1,5 +1,7 @@
 # mtg-brain
 
+[![CI](https://github.com/brunocmattos/mtg-brain/actions/workflows/ci.yml/badge.svg)](https://github.com/brunocmattos/mtg-brain/actions/workflows/ci.yml)
+
 > Um “cérebro” local de **Magic: The Gathering** — banco de dados completo + API + app web. Tudo rodando na sua máquina, a custo **US$ 0**.
 
 O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, regras oficiais, combos), guarda em Postgres e expõe isso de duas formas: uma **API HTTP** e um **app web** com cara de site de Magic de verdade. Para perguntas em linguagem natural, um **servidor MCP** liga o banco direto ao Claude Code (ver [Inteligência via MCP](#inteligência-via-mcp)) — sem precisar de LLM local.
