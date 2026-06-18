@@ -698,7 +698,15 @@ def _power_rank(*, lands, ramp, draw, interaction, avg_cmc, combos, gc, tutors, 
     s_draw = _band(draw, 8, 13, 2, 20)
     s_curve = _curve_score(avg_cmc)
     consistency = round((s_lands + s_ramp + s_draw + s_curve) / 4, 1)
-    inter = _band(interaction, 8, 12, 2, 18)
+    # interação: decai abaixo de ~8 (pouca resposta é ruim), 10 na faixa ideal (8–12),
+    # e ACIMA de 12 NÃO despenca — ter MAIS resposta não te deixa pior; só retorno
+    # decrescente leve com piso. (Antes 17 peças davam 1.7/10, o que era absurdo.)
+    if interaction < 8:
+        inter = _band(interaction, 8, 12, 2, 18)
+    elif interaction <= 12:
+        inter = 10.0
+    else:
+        inter = max(8.0, round(10.0 - (interaction - 12) * 0.25, 1))
     threat = round(min(10.0, 2.0 + min(combos, 4) * 1.3 + min(gc, 5) * 0.8 + min(tutors, 6) * 0.4), 1)
 
     overall = round((consistency * 0.40 + inter * 0.25 + threat * 0.35) * 10)
