@@ -494,10 +494,23 @@ def _is_draw(text):
 _INTERACTION = ("destroy target", "destroy all", "destroy each", "exile target",
                 "exile all", "counter target", "return target", "return all")
 
+# -X/-X coletivo (ex.: Toxic Deluge "All creatures get -X/-X", Languish "-4/-4").
+# Plural "creatures ... get -" separa wipe de debuff de alvo único ("creature gets -2/-2").
+_MASS_DEBUFF = re.compile(r"\bcreatures\b[^.\n]{0,30}\bget -[\dx]")
+
+
+def _is_mass_removal(t):
+    """Reset de board que NÃO diz 'destroy/exile all': -X/-X em massa ou overload que
+    troca 'target' por 'each' (ex.: Toxic Deluge, Languish, Damn em overload).
+    Recebe o texto já em minúsculas."""
+    if _MASS_DEBUFF.search(t):
+        return True
+    return "overload" in t and ("destroy target" in t or "exile target" in t)
+
 
 def _is_interaction(text):
     t = (text or "").lower()
-    return any(k in t for k in _INTERACTION)
+    return any(k in t for k in _INTERACTION) or _is_mass_removal(t)
 
 
 def _is_tutor(text):
@@ -507,7 +520,9 @@ def _is_tutor(text):
 
 def _is_wipe(text):
     t = (text or "").lower()
-    return "destroy all" in t or "exile all" in t or "destroy each" in t
+    if "destroy all" in t or "exile all" in t or "destroy each" in t or "exile each" in t:
+        return True
+    return _is_mass_removal(t)
 
 
 def _is_counter(text):
