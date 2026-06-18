@@ -494,9 +494,10 @@ def _is_draw(text):
 _INTERACTION = ("destroy target", "destroy all", "destroy each", "exile target",
                 "exile all", "counter target", "return target", "return all")
 
-# -X/-X coletivo (ex.: Toxic Deluge "All creatures get -X/-X", Languish "-4/-4").
-# Plural "creatures ... get -" separa wipe de debuff de alvo único ("creature gets -2/-2").
-_MASS_DEBUFF = re.compile(r"\bcreatures\b[^.\n]{0,30}\bget -[\dx]")
+# -X/-X coletivo: "creatures ... get -" (Toxic Deluge) OU "each creature gets -"
+# (The Meathook Massacre). "each creature"/"creatures" separa wipe de debuff de alvo
+# único ("target creature gets -2/-2", que NÃO casa nenhum dos dois).
+_MASS_DEBUFF = re.compile(r"\bcreatures\b[^.\n]{0,30}\bget -[\dx]|\beach creature gets -[\dx]")
 
 
 def _is_mass_removal(t):
