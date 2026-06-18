@@ -682,6 +682,17 @@ def _band(v, lo, hi, hard_lo, hard_hi):
     return round(max(0.0, 10.0 * (hard_hi - v) / (hard_hi - hi)), 1) if hard_hi > hi else 0.0
 
 
+def _band_soft_high(v, lo, hi, hard_lo, floor=8.0, slope=0.25):
+    """Como _band no lado BAIXO (pouca coisa é ruim), mas o lado ALTO não despenca:
+    acima de hi há retorno decrescente leve com piso. Ter MAIS ramp/compra/interação
+    não te pune — um deck com muita resposta não vale menos que um com a quantia 'ideal'."""
+    if v < lo:
+        return _band(v, lo, hi, hard_lo, hi + 1)
+    if v <= hi:
+        return 10.0
+    return max(floor, round(10.0 - (v - hi) * slope, 1))
+
+
 def _curve_score(avg):  # curva mais baixa = mais consistente
     if avg <= 2.8:
         return 10.0
@@ -693,20 +704,14 @@ def _curve_score(avg):  # curva mais baixa = mais consistente
 def _power_rank(*, lands, ramp, draw, interaction, avg_cmc, combos, gc, tutors, complete):
     """Score 0-100 de quão bem montado/forte o deck é. Reaproveita os números da análise.
     NÃO é probabilidade de ganhar — não modela oponentes, pilotagem nem sorte."""
+    # terrenos MANTÊM penalidade no topo (flood é fraqueza real); ramp/compra/interação não:
+    # ter de sobra não te deixa pior, só rende menos (piso 8.0). Antes draw=20/inter=17 davam ~0.
     s_lands = _band(lands, 35, 39, 28, 45)
-    s_ramp = _band(ramp, 9, 14, 2, 20)
-    s_draw = _band(draw, 8, 13, 2, 20)
+    s_ramp = _band_soft_high(ramp, 9, 14, 2)
+    s_draw = _band_soft_high(draw, 8, 13, 2)
     s_curve = _curve_score(avg_cmc)
     consistency = round((s_lands + s_ramp + s_draw + s_curve) / 4, 1)
-    # interação: decai abaixo de ~8 (pouca resposta é ruim), 10 na faixa ideal (8–12),
-    # e ACIMA de 12 NÃO despenca — ter MAIS resposta não te deixa pior; só retorno
-    # decrescente leve com piso. (Antes 17 peças davam 1.7/10, o que era absurdo.)
-    if interaction < 8:
-        inter = _band(interaction, 8, 12, 2, 18)
-    elif interaction <= 12:
-        inter = 10.0
-    else:
-        inter = max(8.0, round(10.0 - (interaction - 12) * 0.25, 1))
+    inter = _band_soft_high(interaction, 8, 12, 2)
     threat = round(min(10.0, 2.0 + min(combos, 4) * 1.3 + min(gc, 5) * 0.8 + min(tutors, 6) * 0.4), 1)
 
     overall = round((consistency * 0.40 + inter * 0.25 + threat * 0.35) * 10)
