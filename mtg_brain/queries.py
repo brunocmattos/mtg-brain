@@ -414,6 +414,7 @@ def _deck_cards(deck_id):
     return _rows(f"""
         SELECT dc.card_name AS name, dc.qty, dc.is_commander, c.id::text AS id,
                c.type_line, c.cmc, c.mana_cost, c.color_identity, c.oracle_text,
+               c.produced_mana,
                COALESCE((dc.printing->>'usd')::numeric, p.usd) AS usd,
                COALESCE((dc.printing->>'eur')::numeric, p.eur) AS eur,
                COALESCE((dc.printing->>'tix')::numeric, p.tix) AS tix,
@@ -425,6 +426,7 @@ def _deck_cards(deck_id):
         FROM deck_cards dc
         LEFT JOIN LATERAL (
             SELECT id, type_line, cmc, mana_cost, color_identity, oracle_text,
+                   data->'produced_mana' AS produced_mana,
                    {_img('normal')} AS image, {_img('art_crop')} AS art_crop
             FROM cards WHERE name = dc.card_name
             ORDER BY (prices->>'usd')::numeric ASC NULLS LAST LIMIT 1
@@ -452,6 +454,7 @@ def get_deck(deck_id):
     cards = _deck_cards(deck_id)
     for c in cards:
         c.pop("oracle_text", None)  # texto completo não precisa ir na lista
+        c.pop("produced_mana", None)  # só serve pra análise de manabase
     deck["cards"] = cards
     return deck
 
@@ -738,12 +741,38 @@ def _power_rank(*, lands, ramp, draw, interaction, avg_cmc, combos, gc, tutors, 
             "note": None if complete else "Deck incompleto (≠100 cartas) — score limitado."}
 
 
+def _mana_sources(rows, idset):
+    """Fontes de mana por cor, contadas pelo que a carta REALMENTE produz
+    (Scryfall `produced_mana`), e não pela color identity.
+
+    Por que não color_identity: terreno tipo Command Tower / Exotic Orchard /
+    Urborg tem color identity vazia mas É fonte da sua cor; já uma carta colorida
+    sem habilidade de mana (um removal preto, p.ex.) tem identity B mas NÃO é
+    fonte. `produced_mana` corrige os dois lados de uma vez.
+
+    Cores "any color" (Command Tower lista WUBRG) são limitadas à identidade do
+    deck — numa deck mono-preta a Command Tower conta só como fonte de B, não das
+    cinco. Mana incolor ({C}) é fonte válida pra qualquer deck (terrenos que geram
+    só incolor — Reliquary Tower, Ancient Tomb — contam em 'C'), então NÃO é
+    amarrado à identidade.
+    """
+    src = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
+    for r in rows:
+        q = r.get("qty") or 1
+        for c in (r.get("produced_mana") or []):
+            if c == "C":
+                src["C"] += q
+            elif c in idset and c in src:
+                src[c] += q
+    return src
+
+
 def deck_analysis(deck_id):
     if not _rows("SELECT 1 FROM decks WHERE id=%(id)s", {"id": deck_id}):
         return None  # deck inexistente → a rota devolve 404 (em vez de análise vazia falsa)
     cards = _deck_cards(deck_id)
     total = sum((r["qty"] or 1) for r in cards)
-    types, colors = {}, {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0}
+    types = {}
     curve = {str(i): 0 for i in range(7)}
     curve["7+"] = 0
     lands = ramp = draw = interaction = tutors = 0
@@ -764,9 +793,6 @@ def deck_analysis(deck_id):
             curve["7+" if cmc >= 7 else str(cmc)] += q
             cmc_sum += cmc * q
             cmc_n += q
-        for c in (r["color_identity"] or []):
-            if c in colors:
-                colors[c] += q
         if _is_ramp(b, r["oracle_text"]):
             ramp += q
         if _is_draw(r["oracle_text"]):
@@ -810,6 +836,8 @@ def deck_analysis(deck_id):
         else sorted({c for r in cards for c in (r["color_identity"] or [])})
     )
     idset = set(identity)
+    # Fontes de mana por cor pelo que a carta produz, não pela color identity (ver _mana_sources).
+    colors = _mana_sources(cards, idset)
     off_color = sorted({r["name"] for r in cards if set(r["color_identity"] or []) - idset})
     gc = sorted({r["name"] for r in cards if r["name"] in GAME_CHANGERS})
     mld = any(_is_mld(r["name"], r["oracle_text"]) for r in cards)
