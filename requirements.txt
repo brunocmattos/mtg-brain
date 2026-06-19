@@ -5,3 +5,4 @@ python-dotenv>=1.0
 tqdm>=4.66
 fastapi>=0.110
 uvicorn[standard]>=0.29
+fastembed>=0.4  # embeddings locais (ONNX) p/ busca semantica via pgvector

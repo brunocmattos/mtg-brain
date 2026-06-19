@@ -19,6 +19,7 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
 
 - **Buscar comandantes** por tema (`vampire`, `sacrifice`, `mill`…), cor e preço, com a arte oficial das cartas.
 - **Pesquisar qualquer carta** por nome ou texto de regras (`destroy target creature`, `loses life`…).
+- **Busca semântica** (por *significado*, não por palavra): descreva o que procura (`punish opponents for drawing`, `reanimate a big creature`, `protect my board from a wrath`) e o app acha via **embeddings locais + pgvector** — toggle "Semântica ✨" na tela de Cartas.
 - **Montar decks** a partir de um **seletor de comandante** com filtros (cor, CMC, tema), com busca, sugestões por comandante, preview grande da carta no canto, e visualização em **lista** ou **grade de imagens** (estilo Moxfield/Archidekt).
 - **Trocar a versão/arte** de cada carta no deck (botão ⇄) — todas as impressões vêm do Scryfall sob demanda, com a arte e o preço de cada edição.
 - **Analisar o deck**: contagem por tipo, curva de mana, identidade de cor, ramp/compra/interação/terrenos, **bracket** (sistema oficial WotC), **combos presentes**, um **rank de Poder & Consistência** (heurístico, *não* é taxa de vitória) e um indicador de **pontos fracos** ("o que falta": resposta em velocidade de instante, wipes, counters, ramp, compra…).
@@ -145,7 +146,7 @@ Depois é só perguntar no Claude Code; ele consulta o banco (read-only) e respo
 | Comando | O que faz |
 |---|---|
 | `python -m mtg_brain init-db` | cria/atualiza o schema |
-| `python -m mtg_brain ingest <alvos…>` | `sets`, `catalogs`, `cards`, `rulings`, `rules`, `combos`, `prices`, `manapool`, `symbols` ou `all` |
+| `python -m mtg_brain ingest <alvos…>` | `sets`, `catalogs`, `cards`, `rulings`, `rules`, `combos`, `prices`, `manapool`, `symbols`, `embeddings` ou `all` |
 | `python -m mtg_brain stats` | conta registros por tabela |
 
 A ingestão é **idempotente** (tudo é upsert) e **resumível** (combos retomam do offset em caso de rate-limit), então pode rodar de novo pra atualizar.
@@ -162,6 +163,7 @@ Tudo sob `/api`. Veja a doc interativa em `http://localhost:8000/docs` (Swagger,
 | `GET /api/stats` | contagem por tabela |
 | `GET /api/symbols` | mapa `{ "{W}": svg_uri, … }` (símbolos oficiais) |
 | `GET /api/cards?q=&colors=&limit=` | busca de cartas por nome/texto |
+| `GET /api/cards/semantic?q=` | busca semântica por significado (embeddings + pgvector) |
 | `GET /api/cards/{id}` | detalhe da carta (+ rulings) |
 | `GET /api/commanders` · `…/recommend` · `…/suggest` | lista / recomenda por tema / sugere cartas |
 | `GET /api/combos?card=` · `?identity=` | combos por carta ou por identidade |
@@ -213,7 +215,8 @@ A skill `/deck-creator` mora fora do repo, em `~/.claude/skills/deck-creator/SKI
 - **Fase 3 — Inteligência via MCP (Claude Code)** ✅
 - **Fase 4 — App web: deckbuilder, análise, preços multi-fonte, rank, importador/export, seletor de versão/arte** ✅
 - **Fase 5 — Geração de deck via skill `/deck-creator` (Claude Code) + tudo no Docker** ✅
-- **Próximo:** skill `deck-optimizer` (afinar deck existente); refresh agendado de preços; busca semântica (pgvector).
+- **Fase 6 — Qualidade & RAG** ✅ — suíte de testes (pytest) + **CI no GitHub Actions**; **busca semântica** (pgvector + embeddings locais via fastembed).
+- **Próximo:** refresh agendado de preços; registro de partidas/win-rate; testes de integração (com Postgres no CI).
 
 ## Notas e atribuição
 

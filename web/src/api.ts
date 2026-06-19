@@ -208,6 +208,10 @@ export const api = {
     return get<CardSummary[]>(`/cards?${p.toString()}`)
   },
 
+  // Busca semântica (por significado, via embeddings/pgvector).
+  semanticSearch: (q: string, limit = 60) =>
+    get<CardSummary[]>(`/cards/semantic?q=${encodeURIComponent(q)}&limit=${limit}`),
+
   card: (id: string) => get<CardDetail>(`/cards/${id}`),
 
   combosForCard: (name: string) =>

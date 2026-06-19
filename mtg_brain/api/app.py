@@ -64,6 +64,12 @@ def cards(q: str | None = None, colors: list[str] | None = Query(None), limit: i
     return queries.search_cards(q, colors, limit, sort)
 
 
+# IMPORTANTE: declarar antes de /cards/{card_id} (senão "semantic" cai no matcher de UUID).
+@api.get("/cards/semantic")
+def cards_semantic(q: str, limit: int = 40):
+    return queries.semantic_search(q, limit)
+
+
 @api.get("/cards/{card_id}")
 def card(card_id: UUID):  # UUID inválido → 422 (em vez de 500 no cast do Postgres)
     c = queries.get_card(str(card_id))

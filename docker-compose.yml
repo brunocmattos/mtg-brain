@@ -1,6 +1,8 @@
 services:
   db:
-    image: postgres:17
+    # pgvector/pgvector:pg17 = Postgres 17 + extensao pgvector (busca semantica).
+    # Mesmo PG17 do postgres:17, entao o volume mtg_pgdata e compativel.
+    image: pgvector/pgvector:pg17
     container_name: mtg-brain-db
     restart: unless-stopped
     environment:

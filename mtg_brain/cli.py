@@ -10,7 +10,7 @@ import argparse
 import sys
 
 from . import db
-from .ingest import combos, manapool, rules, scryfall
+from .ingest import combos, embeddings, manapool, rules, scryfall
 
 INGESTORS = {
     "sets": scryfall.ingest_sets,
@@ -22,6 +22,7 @@ INGESTORS = {
     "prices": scryfall.ingest_prices,
     "symbols": scryfall.ingest_symbols,
     "manapool": manapool.ingest_manapool,
+    "embeddings": embeddings.ingest_embeddings,
 }
 # Ordem segura: sets/catalogs/cards/rulings antes de combos (mais pesado).
 ORDER = ["sets", "catalogs", "cards", "rulings", "rules", "combos"]

@@ -86,6 +86,23 @@ def search_cards(q=None, colors=None, limit=40, sort="edhrec"):
     return _rows(sql, params)
 
 
+def semantic_search(q, limit=40):
+    """Busca SEMÂNTICA (por significado, não por palavra): embeda a query e ordena
+    pela proximidade do vetor via pgvector. Mesmo formato de carta do search_cards,
+    + 'similarity' (0..1). Import do modelo é lazy — queries.py continua importável
+    sem fastembed (host/testes)."""
+    if not q or not q.strip():
+        return []
+    from . import embed  # lazy: só carrega o modelo quando realmente busca
+    lit = embed.embed_query(q)
+    sql = (f"SELECT {_card_cols()}, "
+           f"round((1 - (embedding <=> %(v)s::vector))::numeric, 3) AS similarity "
+           f"FROM cards WHERE embedding IS NOT NULL "
+           f"AND (legalities->>'commander') = 'legal' "  # corta carta de piada/ilegal (Un-set etc.)
+           f"ORDER BY embedding <=> %(v)s::vector LIMIT %(limit)s")
+    return _rows(sql, {"v": lit, "limit": _limit(limit)})
+
+
 def get_card(card_id):
     sql = f"""SELECT id, name, mana_cost, cmc, type_line, oracle_text, color_identity,
         colors, keywords, power, toughness, loyalty, rarity, set_code, released_at,
