@@ -31,3 +31,21 @@ def embed_query(text):
     melhor que query_embed (que era no-op nesta versão do fastembed)."""
     vec = next(iter(model().embed([QUERY_PREFIX + (text or "")])))
     return to_literal(vec)
+
+
+RERANK_MODEL = os.getenv("RERANK_MODEL", "Xenova/ms-marco-MiniLM-L-6-v2")
+
+
+@lru_cache(maxsize=1)
+def reranker():
+    from fastembed.rerank.cross_encoder import TextCrossEncoder
+    return TextCrossEncoder(model_name=RERANK_MODEL, cache_dir=CACHE_DIR)
+
+
+def rerank_scores(query, docs):
+    """Cross-encoder: pontua (query, doc) lendo os dois JUNTOS — bem melhor que
+    embedding pra intenção composta. Retorna floats na ordem dos docs."""
+    docs = list(docs)
+    if not docs:
+        return []
+    return [float(s) for s in reranker().rerank(query, docs)]

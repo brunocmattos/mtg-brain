@@ -87,20 +87,65 @@ def search_cards(q=None, colors=None, limit=40, sort="edhrec"):
 
 
 def semantic_search(q, limit=40):
-    """Busca SEMÂNTICA (por significado, não por palavra): embeda a query e ordena
-    pela proximidade do vetor via pgvector. Mesmo formato de carta do search_cards,
-    + 'similarity' (0..1). Import do modelo é lazy — queries.py continua importável
-    sem fastembed (host/testes)."""
+    """Busca HÍBRIDA + RERANK: (1) recupera candidatos fundindo busca vetorial
+    (pgvector) com full-text do Postgres via Reciprocal Rank Fusion (RRF); (2) reordena
+    com um cross-encoder (lê query+carta juntos -> entende intenção composta tipo
+    "punir POR comprar"). Import dos modelos é lazy (queries.py segue importável sem
+    fastembed no host/testes). Mesmo formato de carta do search_cards, + 'score'."""
     if not q or not q.strip():
         return []
     from . import embed  # lazy: só carrega o modelo quando realmente busca
     lit = embed.embed_query(q)
-    sql = (f"SELECT {_card_cols()}, "
-           f"round((1 - (embedding <=> %(v)s::vector))::numeric, 3) AS similarity "
-           f"FROM cards WHERE embedding IS NOT NULL "
-           f"AND (legalities->>'commander') = 'legal' "  # corta carta de piada/ilegal (Un-set etc.)
-           f"ORDER BY embedding <=> %(v)s::vector LIMIT %(limit)s")
-    return _rows(sql, {"v": lit, "limit": _limit(limit)})
+    sql = f"""
+        WITH qq AS (
+            -- plainto_tsquery faz AND de tudo (estrito demais p/ linguagem natural);
+            -- troco '&' por '|' => OR (casa qualquer termo; ts_rank ordena por cobertura).
+            SELECT NULLIF(replace(plainto_tsquery('english', %(q)s)::text, '&', '|'), '')::tsquery AS tq
+        ),
+        sem AS (
+            SELECT id, row_number() OVER (ORDER BY embedding <=> %(v)s::vector) AS rk
+            FROM cards
+            WHERE embedding IS NOT NULL AND (legalities->>'commander') = 'legal'
+            ORDER BY embedding <=> %(v)s::vector
+            LIMIT 150
+        ),
+        lex AS (
+            SELECT id, row_number() OVER (
+                       ORDER BY ts_rank(fts, (SELECT tq FROM qq)) DESC) AS rk
+            FROM cards
+            WHERE (legalities->>'commander') = 'legal'
+              AND (SELECT tq FROM qq) IS NOT NULL
+              AND fts @@ (SELECT tq FROM qq)
+            LIMIT 150
+        ),
+        fused AS (  -- RRF (k=60): soma 1/(k+rank) das duas listas; 'cid' evita ambiguidade com cards.id
+            SELECT id AS cid, SUM(1.0 / (60 + rk)) AS score
+            FROM (SELECT id, rk FROM sem UNION ALL SELECT id, rk FROM lex) u
+            GROUP BY id
+        )
+        SELECT {_card_cols()}, cards.oracle_text, round(f.score::numeric, 5) AS score
+        FROM cards JOIN fused f ON f.cid = cards.id
+        ORDER BY f.score DESC
+        LIMIT %(cand)s
+    """
+    # 1) recupera CANDIDATOS (mais que o limite) via híbrido; 2) reordena com o
+    # cross-encoder (lê query+carta juntos -> entende intenção composta).
+    cand = max(_limit(limit), 100)
+    rows = _rows(sql, {"v": lit, "q": q, "cand": cand})
+    if not rows:
+        return []
+    docs = [". ".join(p for p in (r.get("name"), r.get("type_line"), r.get("oracle_text")) if p)
+            for r in rows]
+    try:
+        scores = embed.rerank_scores(q, docs)
+        for r, s in zip(rows, scores):
+            r["score"] = round(float(s), 4)
+        rows.sort(key=lambda r: r["score"], reverse=True)
+    except Exception:
+        pass  # reranker indisponível -> mantém a ordem híbrida (RRF)
+    for r in rows:
+        r.pop("oracle_text", None)  # campo auxiliar do rerank, fora do payload
+    return rows[: _limit(limit)]
 
 
 def get_card(card_id):

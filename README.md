@@ -19,7 +19,7 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
 
 - **Buscar comandantes** por tema (`vampire`, `sacrifice`, `mill`…), cor e preço, com a arte oficial das cartas.
 - **Pesquisar qualquer carta** por nome ou texto de regras (`destroy target creature`, `loses life`…).
-- **Busca semântica** (por *significado*, não por palavra): descreva o que procura (`punish opponents for drawing`, `reanimate a big creature`, `protect my board from a wrath`) e o app acha via **embeddings locais + pgvector** — toggle "Semântica ✨" na tela de Cartas.
+- **Busca semântica** (por *significado*, não por palavra): descreva o que procura (`reanimate a big creature`, `counter target spell unless they pay`, `sacrifice creatures for value`) — busca **híbrida** (embeddings + full-text via RRF) com **rerank por cross-encoder**, tudo local/grátis. Toggle "Semântica ✨" na tela de Cartas.
 - **Montar decks** a partir de um **seletor de comandante** com filtros (cor, CMC, tema), com busca, sugestões por comandante, preview grande da carta no canto, e visualização em **lista** ou **grade de imagens** (estilo Moxfield/Archidekt).
 - **Trocar a versão/arte** de cada carta no deck (botão ⇄) — todas as impressões vêm do Scryfall sob demanda, com a arte e o preço de cada edição.
 - **Analisar o deck**: contagem por tipo, curva de mana, identidade de cor, ramp/compra/interação/terrenos, **bracket** (sistema oficial WotC), **combos presentes**, um **rank de Poder & Consistência** (heurístico, *não* é taxa de vitória) e um indicador de **pontos fracos** ("o que falta": resposta em velocidade de instante, wipes, counters, ramp, compra…).

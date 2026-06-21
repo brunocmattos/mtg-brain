@@ -17,6 +17,11 @@ def ingest_embeddings():
             cur.execute("DROP INDEX IF EXISTS cards_embedding_hnsw")
             cur.execute("ALTER TABLE cards DROP COLUMN IF EXISTS embedding")
             cur.execute(f"ALTER TABLE cards ADD COLUMN embedding vector({embed.DIM})")
+            # full-text pra busca híbrida: coluna gerada (popula na hora) + índice GIN.
+            cur.execute("ALTER TABLE cards ADD COLUMN IF NOT EXISTS fts tsvector "
+                        "GENERATED ALWAYS AS (to_tsvector('english', coalesce(name,'') || ' ' "
+                        "|| coalesce(type_line,'') || ' ' || coalesce(oracle_text,''))) STORED")
+            cur.execute("CREATE INDEX IF NOT EXISTS cards_fts_gin ON cards USING gin(fts)")
             conn.commit()
             cur.execute("SELECT id::text, name, type_line, oracle_text FROM cards")
             rows = cur.fetchall()
