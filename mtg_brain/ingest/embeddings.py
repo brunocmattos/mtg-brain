@@ -13,7 +13,10 @@ def ingest_embeddings():
     with db.connect() as conn:
         with conn.cursor() as cur:
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            cur.execute(f"ALTER TABLE cards ADD COLUMN IF NOT EXISTS embedding vector({embed.DIM})")
+            # recria a coluna/índice — lida com troca de modelo (mudança de dimensão).
+            cur.execute("DROP INDEX IF EXISTS cards_embedding_hnsw")
+            cur.execute("ALTER TABLE cards DROP COLUMN IF EXISTS embedding")
+            cur.execute(f"ALTER TABLE cards ADD COLUMN embedding vector({embed.DIM})")
             conn.commit()
             cur.execute("SELECT id::text, name, type_line, oracle_text FROM cards")
             rows = cur.fetchall()

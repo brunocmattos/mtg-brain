@@ -7,9 +7,11 @@ mais leve que um LLM local — só o necessário pra transformar texto em vetor.
 import os
 from functools import lru_cache
 
-MODEL_NAME = os.getenv("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
-DIM = 384
+MODEL_NAME = os.getenv("EMBED_MODEL", "BAAI/bge-base-en-v1.5")
+DIM = 768
 CACHE_DIR = os.getenv("FASTEMBED_CACHE", "/app/.fastembed_cache")
+# bge (short query -> long passage): a QUERY leva a instrução; os passages (corpus) NÃO.
+QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
 
 @lru_cache(maxsize=1)
@@ -24,8 +26,8 @@ def to_literal(vec):
 
 
 def embed_query(text):
-    """Texto da busca -> literal pgvector pronto. Usa query_embed (bge adiciona o
-    prefixo de instrução de busca), que casa muito melhor com o corpus (que foi
-    embedado como 'passages' via embed())."""
-    vec = next(iter(model().query_embed(text or "")))
+    """Texto da busca -> literal pgvector pronto. Prepende a instrução de query do bge
+    (o corpus foi embedado como 'passages', sem prefixo) — uso assimétrico recomendado,
+    melhor que query_embed (que era no-op nesta versão do fastembed)."""
+    vec = next(iter(model().embed([QUERY_PREFIX + (text or "")])))
     return to_literal(vec)

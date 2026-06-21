@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-baixa o modelo de embedding (camada cacheada ANTES do COPY do codigo, pra
 # mudanca de codigo nao re-baixar o modelo). Nome/cache batem com mtg_brain/embed.py.
-RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5', cache_dir='/app/.fastembed_cache')"
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-base-en-v1.5', cache_dir='/app/.fastembed_cache')"
 
 COPY mtg_brain/ ./mtg_brain/
 COPY web/dist/ ./web/dist/
