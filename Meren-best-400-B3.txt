@@ -1,0 +1,90 @@
+// Meren of Clan Nel Toth — Best @ $400 / Bracket 3 (reanimator valor + Craterhoof + dreno)
+// 100 cartas | ManaPool ~$389.73 | Scryfall ~$970.82
+
+1 Meren of Clan Nel Toth (CMM) 685
+1 Carrion Feeder (SLD) 1114
+1 Caustic Caterpillar (J22) 86
+1 Gravecrawler (SLD) 231
+1 Phyrexian Reclamation (SLD) 1808
+1 Skullclamp (SLD) 2416
+1 Sol Ring (SLD) 2417
+1 Spore Frog (PCY) 126
+1 Vampiric Tutor (DMR) 108
+1 Veil of Summer (SOA) 60
+1 Village Rites (SLD) 2248
+1 Viscera Seer (CMR) 658
+1 Animate Dead (SLD) 2189
+1 Arcane Signet (SLD) 2464
+1 Assassin's Trophy (2X2) 372
+1 Blood Artist (2X2) 352
+1 Bloodghast (DFT) 536
+1 Deadly Dispute (MAR) 64
+1 Demonic Tutor (CMM) 150
+1 Diabolic Intent (FCA) 34
+1 Go for the Throat (SLD) 1986
+1 Golgari Signet (SLD) 292
+1 Lightning Greaves (SLD) 2465
+1 Night's Whisper (SLD) 1937
+1 Reassembling Skeleton (SLD) 1406
+1 Regrowth (SLD) 7075
+1 Sakura-Tribe Elder (SLD) 192
+1 Talisman of Resilience (SOC) 432
+1 Zulaport Cutthroat (SLD) 1982
+1 Ashnod's Altar (SLD) 1679
+1 Bastion of Remembrance (TLE) 160
+1 Beast Within (MAR) 75
+1 Buried Alive (MH3) 273
+1 Cultivate (SLD) 246
+1 Eternal Witness (2X2) 368
+1 Farhaven Elf (SLD) 766
+1 Fleshbag Marauder (CMR) 648
+1 Grim Haruspex (SLD) 2243
+1 Merciless Executioner (SLD) 1025
+1 Midnight Reaper (SLD) 1171
+1 Morbid Opportunist (SPG) 32
+1 Pernicious Deed (SLD) 1777
+1 Phyrexian Arena (SLD) 2333
+1 Plaguecrafter (SLD) 1116
+1 Putrefy (SLD) 2299
+1 Toxic Deluge (SLD) 1860
+1 Victimize (SLD) 2486
+1 Woe Strider (THB) 317
+1 Wood Elves (SLD) 1101
+1 Damnation (SLD) 2019
+1 Grave Pact (WOT) 29
+1 Greater Good (SLD) 1693
+1 Jarad's Orders (RTR) 175
+1 Ravenous Chupacabra (SLD) 305
+1 Solemn Simulacrum (SLD) 1725
+1 Yawgmoth, Thran Physician (DMR) 110
+1 Dictate of Erebos (SLD) 2204
+1 Gray Merchant of Asphodel (SLC) 34
+1 Living Death (DSC) 373
+1 Shriekmaw (TSR) 331
+1 Syr Konrad, the Grim (FCA) 10
+1 Bolas's Citadel (FCA) 7
+1 Mikaeus, the Unhallowed (CMM) 1061
+1 Craterhoof Behemoth (TDM) 346
+1 Blooming Marsh (OTJ) 300
+1 Bojuka Bog (SLD) 1532â˜…
+1 Cabal Coffers (LTC) 390
+1 Castle Locthwain (ELD) 389
+1 Command Tower (PMEI) 2026-13
+1 Deathcap Glade (SOS) 301
+1 Deserted Temple (EOS) 146
+1 Exotic Orchard (SLD) 1231
+7 Forest (SLD) 1954
+1 Grim Backwoods (SLD) 354
+1 High Market (EOS) 153
+1 Hissing Quagmire (EOS) 154
+1 Krosan Verge (JUD) 141
+1 Llanowar Wastes (BRO) 299
+1 Mortuary Mire (PIP) 800
+1 Myriad Landscape (CMM) 660
+1 Necroblossom Snarl (STX) 363
+1 Nurturing Peatland (ACR) 114
+1 Overgrown Tomb (ECL) 350
+1 Path of Ancestry (SLD) 914
+8 Swamp (SLD) 1952
+1 Twilight Mire (SOC) 418
+1 Woodland Cemetery (SLD) 738
