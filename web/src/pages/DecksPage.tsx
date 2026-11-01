@@ -130,12 +130,19 @@ function bucket(c: DeckCardRow): string {
   return 'outro'
 }
 
-// Decklist no formato "<qtd> <nome>" (comandante no topo) — lido pelos importadores
-// de MTG do Tabletop Simulator, Moxfield, Archidekt, etc.
+// Decklist no formato "<qtd> <nome> (SET) <número>" (comandante no topo) — lido pelos
+// importadores de MTG do Tabletop Simulator, Moxfield, Archidekt, etc. O sufixo (SET) número
+// (formato Arena) faz o importador puxar a IMPRESSÃO EXATA escolhida (a "skin"/arte), em vez
+// da impressão padrão. Cartas sem impressão escolhida saem só com o nome (o importador decide).
 function deckToText(deck: Deck): string {
   const cmd = deck.cards.filter((c) => c.is_commander)
   const rest = deck.cards.filter((c) => !c.is_commander).sort((a, b) => a.name.localeCompare(b.name))
-  return [...cmd, ...rest].map((c) => `${c.qty} ${c.name}`).join('\n') + '\n'
+  const line = (c: DeckCardRow) => {
+    const p = c.printing
+    const suffix = p?.set && p?.collector_number ? ` (${p.set.toUpperCase()}) ${p.collector_number}` : ''
+    return `${c.qty} ${c.name}${suffix}`
+  }
+  return [...cmd, ...rest].map(line).join('\n') + '\n'
 }
 
 // tooltip com os 3 preços (TCGplayer USD / Cardmarket EUR / MTGO tix)
