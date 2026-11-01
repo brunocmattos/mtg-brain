@@ -151,6 +151,70 @@ const SRC = [
   { key: 'tix', label: 'MTGO', cur: 'tix' },
 ] as const
 
+// ---- Ficha de RPG (atributos do deck) ----
+const ATTR = '#a855f7' // roxo de mana — sabor de ficha de RPG
+const hexPoint = (cx: number, cy: number, r: number, i: number) => {
+  const ang = ((-90 + i * 60) * Math.PI) / 180 // começa no topo, sentido horário
+  return [cx + r * Math.cos(ang), cy + r * Math.sin(ang)] as const
+}
+const hexPoly = (cx: number, cy: number, r: number) =>
+  Array.from({ length: 6 }, (_, i) => hexPoint(cx, cy, r, i).join(',')).join(' ')
+
+function RpgSheet({ at }: { at: DeckAnalysisData['attributes'] }) {
+  const cx = 100, cy = 100, R = 62
+  const order = at.attrs // ordem do backend: vel · força · resil · inter · consist · sinergia
+  const dataPts = order
+    .map((a, i) => hexPoint(cx, cy, Math.max(2, (a.score / 100) * R), i).join(','))
+    .join(' ')
+  return (
+    <div className="rounded bg-surface-2 p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] uppercase tracking-wide text-muted">🎲 Ficha do Deck</span>
+        <span className="cursor-help text-xs text-muted" title="Atributos estilo RPG (0-100), heurísticos a partir da composição do deck — NÃO é taxa de vitória. Eixos baseados em como a comunidade avalia decks (velocidade/turn-count, resiliência, redundância, sinergia, interação) + base de mana (Karsten).">ⓘ</span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-sm font-semibold text-accent">{at.classe}</span>
+        <span className="text-[11px] text-muted">· destaque: {at.destaque} · média {at.media}</span>
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <svg viewBox="0 0 200 200" className="h-40 w-40 shrink-0" aria-label="radar de atributos">
+          {[0.25, 0.5, 0.75, 1].map((f) => (
+            <polygon key={f} points={hexPoly(cx, cy, R * f)} fill="none" stroke="#ffffff14" strokeWidth="1" />
+          ))}
+          {order.map((a, i) => {
+            const [ex, ey] = hexPoint(cx, cy, R, i)
+            const [lx, ly] = hexPoint(cx, cy, R + 15, i)
+            return (
+              <g key={a.key}>
+                <line x1={cx} y1={cy} x2={ex} y2={ey} stroke="#ffffff14" strokeWidth="1" />
+                <text x={lx} y={ly} fontSize="13" textAnchor="middle" dominantBaseline="central">{a.icon}</text>
+              </g>
+            )
+          })}
+          <polygon points={dataPts} fill={`${ATTR}55`} stroke={ATTR} strokeWidth="1.5" strokeLinejoin="round" />
+          {order.map((a, i) => {
+            const [px, py] = hexPoint(cx, cy, Math.max(2, (a.score / 100) * R), i)
+            return <circle key={a.key} cx={px} cy={py} r="2.2" fill={ATTR} />
+          })}
+        </svg>
+        <div className="flex-1 space-y-1">
+          {order.map((a) => (
+            <div key={a.key} title={a.detail}>
+              <div className="flex justify-between text-[11px]">
+                <span>{a.icon} {a.label} <span className="text-muted">{a.rpg}</span></span>
+                <span className="text-muted">{a.score}</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded bg-bg">
+                <div className="h-full" style={{ width: `${a.score}%`, background: ATTR }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisData }) {
   const comp = a.completeness
   const { data: fx } = useQuery({ queryKey: ['fx-usd-brl'], queryFn: api.fx, staleTime: 6 * 3600 * 1000 })
@@ -230,6 +294,8 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
           {a.power.note && <div className="mt-1 text-[10px] text-amber-400">{a.power.note}</div>}
         </div>
       )}
+
+      {a.attributes && <RpgSheet at={a.attributes} />}
 
       {/* identidade + completude */}
       <div className="space-y-1 text-xs">

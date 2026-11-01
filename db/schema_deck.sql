@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS decks (
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 
+-- Guia/notas do deck (markdown): mão inicial, motor, como jogar, tutores, ramp, combos.
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS guide text;
+
 CREATE TABLE IF NOT EXISTS deck_cards (
     deck_id       bigint NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
     card_name     text NOT NULL,

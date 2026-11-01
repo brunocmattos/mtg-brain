@@ -140,6 +140,10 @@ class PrintingBody(BaseModel):
     printing: dict | None = None  # None = volta pra impressão padrão
 
 
+class GuideBody(BaseModel):
+    guide: str | None = None  # markdown; None/'' limpa o guia
+
+
 @api.post("/decks")
 def create_deck(body: DeckCreate):
     return queries.create_deck(body.name, body.commander)
@@ -179,6 +183,11 @@ def add_card(deck_id: int, body: DeckCardBody):
 @api.post("/decks/{deck_id}/cards/printing")
 def set_printing(deck_id: int, body: PrintingBody):
     return queries.set_printing(deck_id, body.card_name, body.printing)
+
+
+@api.put("/decks/{deck_id}/guide")
+def set_guide(deck_id: int, body: GuideBody):
+    return queries.set_guide(deck_id, body.guide)
 
 
 @api.delete("/decks/{deck_id}/cards")

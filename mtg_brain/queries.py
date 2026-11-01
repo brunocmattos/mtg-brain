@@ -351,6 +351,13 @@ def set_printing(deck_id, card_name, printing):
     return {"ok": True}
 
 
+def set_guide(deck_id, guide):
+    """Salva (ou limpa, com guide=None/'') o guia/notas do deck em markdown."""
+    _write("UPDATE decks SET guide = %(g)s WHERE id=%(d)s",
+           {"g": guide or None, "d": deck_id})
+    return {"ok": True}
+
+
 # ---- Importador de decklist (colar texto do Moxfield/Archidekt/etc.) ----
 
 _CARD_LINE = re.compile(r"^\s*(\d+)\s*[xX]?\s+(.+?)\s*$")
@@ -508,7 +515,7 @@ def _deck_cards(deck_id):
 
 
 def get_deck(deck_id):
-    head = _rows("SELECT id, name, commander, created_at FROM decks WHERE id=%(id)s",
+    head = _rows("SELECT id, name, commander, created_at, guide FROM decks WHERE id=%(id)s",
                  {"id": deck_id})
     if not head:
         return None
@@ -597,6 +604,35 @@ def _is_counter(text):
 
 def _is_instant_speed(type_line, text):
     return "instant" in (type_line or "").lower() or "flash" in (text or "").lower()
+
+
+def _is_recursion(text):
+    """Traz coisa de volta do cemitério (reanimação/recursão) — eixo Resiliência."""
+    t = (text or "").lower()
+    if "graveyard" not in t:
+        return False
+    return any(k in t for k in ("return", "onto the battlefield", "to the battlefield",
+                                "to your hand", "to the battlefield from"))
+
+
+def _is_protection(text):
+    """Protege seus permanentes (sobrevive a wipe/remoção) — eixo Resiliência."""
+    t = (text or "").lower()
+    return any(k in t for k in ("hexproof", "indestructible", "protection from", "phase out",
+                                "phases out", "shroud", "can't be countered", "prevent all"))
+
+
+# Fast mana reconhecível (acelera ~2 turnos) — sinal de Velocidade.
+FAST_MANA = {
+    "Sol Ring", "Mana Crypt", "Mana Vault", "Jeweled Lotus", "Lotus Petal", "Chrome Mox",
+    "Mox Diamond", "Mox Opal", "Mox Amber", "Lion's Eye Diamond", "Grim Monolith", "Basalt Monolith",
+    "Dark Ritual", "Cabal Ritual", "Pyretic Ritual", "Desperate Ritual", "Ancient Tomb",
+    "City of Traitors", "Mox Sapphire", "Mox Jet", "Mox Ruby", "Mox Pearl", "Mox Emerald",
+}
+
+
+def _is_fast_mana(name):
+    return name in FAST_MANA
 
 
 def _deck_gaps(*, lands, ramp, draw, interaction, wipes, counters,
@@ -803,6 +839,67 @@ def _power_rank(*, lands, ramp, draw, interaction, avg_cmc, combos, gc, tutors, 
             "note": None if complete else "Deck incompleto (≠100 cartas) — score limitado."}
 
 
+# Classe de RPG do deck pelo atributo dominante (sabor de ficha).
+_DECK_CLASSES = {
+    "velocidade": "Ladino — Aggro/Turbo",
+    "forca": "Bárbaro — Beatdown/Combo",
+    "resiliencia": "Paladino — Grind/Midrange",
+    "interacao": "Mago — Controle",
+    "consistencia": "Clérigo — Toolbox",
+    "sinergia": "Bardo — Sinergia/Tribal",
+}
+
+
+def _deck_attributes(*, lands, ramp, draw, interaction, instant_interaction, wipes, counters,
+                     avg_cmc, combos, gc, tutors, recursion, protection, fast_mana, complete):
+    """Ficha de RPG do deck: 6 atributos (0-100) mapeando STR/DEX/CON/INT/WIS/CHA pra
+    qualidades de Magic. Heurístico, a partir dos mesmos sinais da análise — NÃO é
+    win-rate. Eixos fundamentados em como a comunidade avalia decks (Flipside Gaming:
+    Speed/Resilience/Redundancy/Synergy; turn-count = velocidade; Karsten = base de mana)."""
+    def c(x):
+        return int(max(0, min(100, round(x))))
+
+    # ⚡ Velocidade (DEX): curva baixa + ramp + fast mana → executa/fecha cedo
+    speed = c((4.2 - avg_cmc) / 2.6 * 52 + min(ramp, 14) / 14 * 26 + min(fast_mana, 6) / 6 * 22)
+    # 💪 Força (STR): poder bruto/ameaça/kill — combos + game changers + tutores que acham o kill
+    forca = c(26 + min(combos, 6) * 7.5 + min(gc, 5) * 5.0 + min(tutors, 8) * 2.0)
+    # 🛡️ Resiliência (CON): recursão + proteção + gás de compra + buffer de terra (anti-flood/wipe)
+    resiliencia = c(min(recursion, 6) * 9 + min(protection, 6) * 8 + min(draw, 12) * 2.6
+                    + (12 if lands >= 36 else max(0, (lands - 30) * 2)))
+    # 🗡️ Interação (INT): remoção total + instante + wipes + counters → atrapalhar os outros
+    interacao = c(min(interaction, 12) * 4.6 + min(instant_interaction, 10) * 3.0
+                  + min(wipes, 4) * 3.5 + min(counters, 6) * 2.0)
+    # 🎯 Consistência (WIS): base de mana (perto do alvo Karsten ~37) + ramp + compra + tutores
+    mana_q = 100 - min(abs(lands - 37), 12) * 5
+    consistencia = c(mana_q * 0.34 + min(ramp, 12) / 12 * 26 + min(draw, 12) / 12 * 22
+                     + min(tutors, 8) / 8 * 18)
+    # 🔗 Sinergia (CHA): combos catalogados + tutores (acham a sinergia) — proxy de coesão
+    sinergia = c(28 + min(combos, 8) * 7 + min(tutors, 6) * 3)
+
+    if not complete:  # deck incompleto não pode pontuar alto em nada
+        speed, forca, resiliencia, interacao, consistencia, sinergia = (
+            min(v, 60) for v in (speed, forca, resiliencia, interacao, consistencia, sinergia))
+
+    attrs = [
+        {"key": "velocidade", "label": "Velocidade", "rpg": "DEX", "icon": "⚡", "score": speed,
+         "detail": f"CMC {avg_cmc} · {ramp} ramp · {fast_mana} fast mana"},
+        {"key": "forca", "label": "Força", "rpg": "STR", "icon": "💪", "score": forca,
+         "detail": f"{combos} combo(s) · {gc} game changer(s) · {tutors} tutor(es)"},
+        {"key": "resiliencia", "label": "Resiliência", "rpg": "CON", "icon": "🛡️", "score": resiliencia,
+         "detail": f"{recursion} recursão · {protection} proteção · {draw} compra"},
+        {"key": "interacao", "label": "Interação", "rpg": "INT", "icon": "🗡️", "score": interacao,
+         "detail": f"{interaction} remoção ({instant_interaction} instante) · {wipes} wipe · {counters} counter"},
+        {"key": "consistencia", "label": "Consistência", "rpg": "WIS", "icon": "🎯", "score": consistencia,
+         "detail": f"{lands} terrenos · {ramp} ramp · {draw} compra · {tutors} tutor(es)"},
+        {"key": "sinergia", "label": "Sinergia", "rpg": "CHA", "icon": "🔗", "score": sinergia,
+         "detail": f"{combos} combo(s) no deck · {tutors} tutor(es)"},
+    ]
+    top = max(attrs, key=lambda a: a["score"])
+    media = c(sum(a["score"] for a in attrs) / 6)
+    return {"attrs": attrs, "classe": _DECK_CLASSES[top["key"]],
+            "destaque": top["label"], "media": media}
+
+
 def _mana_sources(rows, idset):
     """Fontes de mana por cor, contadas pelo que a carta REALMENTE produz
     (Scryfall `produced_mana`), e não pela color identity.
@@ -839,6 +936,7 @@ def deck_analysis(deck_id):
     curve["7+"] = 0
     lands = ramp = draw = interaction = tutors = 0
     wipes = counters = instant_interaction = 0
+    recursion = protection = fast_mana = 0
     cmc_sum = cmc_n = 0
     price = price_eur = price_tix = price_mp = 0.0
     # valor "base" = impressão mais barata por carta (ignora a arte escolhida); o de cima é o "atual"
@@ -869,6 +967,12 @@ def deck_analysis(deck_id):
             counters += q
         if _is_tutor(r["oracle_text"]):
             tutors += q
+        if _is_recursion(r["oracle_text"]):
+            recursion += q
+        if _is_protection(r["oracle_text"]):
+            protection += q
+        if _is_fast_mana(r["name"]):
+            fast_mana += q
         if r["name"] in BASIC_LAND_NAMES:
             pass  # básicos não contam no preço
         else:
@@ -911,6 +1015,12 @@ def deck_analysis(deck_id):
         lands=lands, ramp=ramp, draw=draw, interaction=interaction, avg_cmc=avg_cmc,
         combos=len(combos_present), gc=len(gc), tutors=tutors, complete=complete,
     )
+    attributes = _deck_attributes(
+        lands=lands, ramp=ramp, draw=draw, interaction=interaction,
+        instant_interaction=instant_interaction, wipes=wipes, counters=counters, avg_cmc=avg_cmc,
+        combos=len(combos_present), gc=len(gc), tutors=tutors, recursion=recursion,
+        protection=protection, fast_mana=fast_mana, complete=complete,
+    )
     gaps = _deck_gaps(
         lands=lands, ramp=ramp, draw=draw, interaction=interaction, wipes=wipes,
         counters=counters, instant_interaction=instant_interaction, avg_cmc=avg_cmc,
@@ -931,6 +1041,7 @@ def deck_analysis(deck_id):
             "has_commander": cmd is not None,
             "off_color": off_color,
         },
+        "attributes": attributes,
         "bracket": _deck_bracket(gc, two_card_win, mld, extra_turns, len(combos_present)),
         "power": power,
         "gaps": gaps,

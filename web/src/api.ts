@@ -125,6 +125,12 @@ export interface DeckAnalysisData {
     note: string | null
     axes: { key: string; label: string; score: number; detail: string }[]
   }
+  attributes: {
+    attrs: { key: string; label: string; rpg: string; icon: string; score: number; detail: string }[]
+    classe: string
+    destaque: string
+    media: number
+  }
   gaps: { severity: string; text: string }[]
   interaction_detail: { total: number; instant_speed: number; wipes: number; counters: number }
   game_changers: string[]
