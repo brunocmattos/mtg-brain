@@ -1,40 +1,27 @@
 import type { CardSummary } from '../api'
 import CardImage from './CardImage'
-
-const PIP: Record<string, string> = {
-  W: '#f4f1d8',
-  U: '#1f6dab',
-  B: '#2b2230',
-  R: '#d3202a',
-  G: '#1a7b48',
-}
+import { ColorPips } from './Mana'
 
 export default function CommanderCard({
   c,
   onClick,
+  pressed,
 }: {
   c: CardSummary
   onClick: () => void
+  pressed?: boolean
 }) {
   return (
     <button
       onClick={onClick}
-      className="text-left bg-surface rounded-lg overflow-hidden border border-border hover:border-primary transition group"
+      aria-pressed={pressed}
+      className="w-full text-left bg-surface rounded-lg overflow-hidden border border-border hover:border-primary transition group"
     >
-      <CardImage src={c.image} alt={c.name} className="w-full object-cover group-hover:opacity-95" />
+      <CardImage src={c.image} alt={c.name} className="w-full group-hover:opacity-95" />
       <div className="p-2.5">
         <div className="font-medium text-sm leading-tight line-clamp-2">{c.name}</div>
         <div className="flex items-center justify-between mt-1.5 text-xs text-muted">
-          <div className="flex gap-1">
-            {(c.color_identity ?? []).map((col) => (
-              <span
-                key={col}
-                title={col}
-                className="w-3.5 h-3.5 rounded-full border border-border"
-                style={{ background: PIP[col] ?? '#888' }}
-              />
-            ))}
-          </div>
+          <ColorPips colors={c.color_identity ?? []} className="h-3.5 w-3.5" />
           <span className="text-accent">{c.usd != null ? `$${c.usd.toFixed(2)}` : '—'}</span>
         </div>
       </div>

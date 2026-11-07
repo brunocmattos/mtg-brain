@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
+import Modal from './Modal'
 
 const PLACEHOLDER = `Cole a decklist aqui, uma carta por linha:
 
@@ -30,29 +31,9 @@ export default function DeckImporter({
   })
   const res = imp.data
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
-    }
-  }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Importar deck"
-        className="flex w-full max-w-2xl max-h-[88vh] flex-col rounded-xl border border-border bg-bg"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal label="Importar deck" onClose={onClose} className="max-w-2xl rounded-xl border border-border bg-bg">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="font-display text-xl">Importar deck</h2>
           <button onClick={onClose} aria-label="Fechar" className="text-sm text-muted hover:text-text">✕</button>
@@ -87,17 +68,17 @@ export default function DeckImporter({
           <>
             <div className="space-y-2 overflow-y-auto p-4">
               <div className="flex flex-wrap gap-2">
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="nome do deck (opcional)"
-                  className="min-w-44 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary" />
-                <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="comandante (opcional)"
-                  className="min-w-44 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary" />
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="nome do deck (opcional)" aria-label="Nome do deck"
+                  className="min-w-44 flex-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm focus:border-primary" />
+                <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="comandante (opcional)" aria-label="Comandante"
+                  className="min-w-44 flex-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm focus:border-primary" />
               </div>
-              <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={PLACEHOLDER} rows={12}
-                className="w-full resize-y rounded-md border border-border bg-surface px-3 py-2 font-mono text-xs outline-none focus:border-primary" />
+              <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={PLACEHOLDER} rows={12} aria-label="Decklist"
+                className="w-full resize-y rounded-md border border-border-strong bg-surface px-3 py-2 font-mono text-xs focus:border-primary" />
               <p className="text-muted text-xs">
                 Dica: se o export não marcar o comandante, preencha o campo "comandante" acima.
               </p>
-              {imp.isError && <p className="text-sm text-red-400">Não consegui importar — confira o formato da lista.</p>}
+              {imp.isError && <p role="alert" className="text-sm text-red-400">Não consegui importar: {imp.error.message}</p>}
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-border p-4">
               <button onClick={onClose} className="px-3 text-sm text-muted hover:text-text">Cancelar</button>
@@ -111,7 +92,6 @@ export default function DeckImporter({
             </div>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }

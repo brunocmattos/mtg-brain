@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import type { CardSummary } from '../api'
 import CommanderCard from './CommanderCard'
+import { ColorFilter } from './Mana'
+import Modal from './Modal'
+import { ErrorState, Loading } from './States'
 
-const COLORS = ['W', 'U', 'B', 'R', 'G']
 const CMC_OPTS = [
   { v: '', label: 'CMC: qualquer' },
   { v: '0-2', label: 'CMC 0–2' },
@@ -36,19 +38,6 @@ export default function CommanderPicker({
   const [sort, setSort] = useState('edhrec')
   const [picked, setPicked] = useState<CardSummary | null>(null)
 
-  // Esc fecha; trava o scroll do fundo enquanto o modal está aberto.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [onClose])
 
   // busca ao vivo: filtra ~350ms depois de parar de digitar (Enter também funciona)
   useEffect(() => {
@@ -57,15 +46,14 @@ export default function CommanderPicker({
   }, [q])
 
   const [cmcMin, cmcMax] = CMC_RANGE[cmc] ?? [undefined, undefined]
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isPlaceholderData } = useQuery({
     queryKey: ['picker-commanders', submitted, colors, sort, cmc],
+    placeholderData: keepPreviousData,
     queryFn: () =>
       submitted
         ? api.recommendCommanders(submitted, colors, undefined, sort, cmcMin, cmcMax)
         : api.listCommanders(colors, undefined, sort, cmcMin, cmcMax),
   })
-
-  const toggle = (c: string) => setColors((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]))
 
   const filtered = data ?? []
 
@@ -73,15 +61,7 @@ export default function CommanderPicker({
   const pickedVisible = !!picked && filtered.some((c) => c.id === picked.id)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Escolher comandante"
-        className="flex w-full max-w-5xl max-h-[88vh] flex-col rounded-xl border border-border bg-bg"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal label="Escolher comandante" onClose={onClose} className="max-w-5xl rounded-xl border border-border bg-bg">
         {/* filtros */}
         <div className="border-b border-border p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -100,26 +80,15 @@ export default function CommanderPicker({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="tema ou nome (ex.: vampire, Meren)"
-              className="min-w-44 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+              aria-label="Tema ou nome do comandante"
+              className="min-w-44 flex-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm focus:border-primary"
             />
-            <div className="flex gap-1" title="mostra comandantes dentro destas cores">
-              {COLORS.map((c) => (
-                <button
-                  type="button"
-                  key={c}
-                  onClick={() => toggle(c)}
-                  className={`h-9 w-9 rounded-md border text-sm font-bold ${
-                    colors.includes(c) ? 'border-accent bg-surface-2 text-text' : 'border-border text-muted'
-                  }`}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
+            <ColorFilter value={colors} onChange={setColors} />
             <select
               value={cmc}
               onChange={(e) => setCmc(e.target.value)}
-              className="rounded-md border border-border bg-surface px-2 py-2 text-sm outline-none"
+              aria-label="Custo de mana"
+              className="rounded-md border border-border-strong bg-surface px-2 py-2 text-sm"
             >
               {CMC_OPTS.map((o) => (
                 <option key={o.v} value={o.v}>
@@ -130,8 +99,8 @@ export default function CommanderPicker({
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value)}
-              title="ordenar"
-              className="rounded-md border border-border bg-surface px-2 py-2 text-sm outline-none"
+              aria-label="Ordenar"
+              className="rounded-md border border-border-strong bg-surface px-2 py-2 text-sm"
             >
               <option value="edhrec">Popularidade</option>
               <option value="price_asc">Preço ↑</option>
@@ -157,13 +126,13 @@ export default function CommanderPicker({
 
         {/* grade de comandantes */}
         <div className="flex-1 overflow-y-auto p-4">
-          {isLoading && <p className="text-sm text-muted">Carregando…</p>}
-          {error && <p className="text-sm text-red-400">Erro ao buscar comandantes.</p>}
+          {isLoading && <Loading />}
+          {error && <ErrorState error={error} title="Erro ao buscar comandantes" onRetry={() => refetch()} />}
           {data && filtered.length === 0 && <p className="text-sm text-muted">Nada encontrado com esses filtros.</p>}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 transition-opacity ${isPlaceholderData ? 'opacity-60' : ''}`}>
             {filtered.map((c) => (
               <div key={c.id} className={picked?.id === c.id ? 'rounded-lg ring-2 ring-accent' : ''}>
-                <CommanderCard c={c} onClick={() => setPicked(c)} />
+                <CommanderCard c={c} pressed={picked?.id === c.id} onClick={() => setPicked(c)} />
               </div>
             ))}
           </div>
@@ -193,7 +162,6 @@ export default function CommanderPicker({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

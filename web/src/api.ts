@@ -151,27 +151,47 @@ export interface FxRate {
   source: string
 }
 
-async function get<T>(path: string): Promise<T> {
-  const r = await fetch(`/api${path}`)
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+// Erro HTTP com a mensagem que o FastAPI manda em `detail` (ex.: 409 do singleton).
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+function detailMessage(detail: unknown): string | null {
+  if (typeof detail === 'string') return detail
+  // 422 do FastAPI: lista de { loc, msg }
+  if (Array.isArray(detail)) return detail.map((d) => (d as { msg?: string })?.msg).filter(Boolean).join('; ') || null
+  return null
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  let r: Response
+  try {
+    r = await fetch(`/api${path}`, {
+      method,
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  } catch {
+    throw new ApiError(0, 'Sem conexão com a API. Ela está rodando em :8000?')
+  }
+  if (!r.ok) {
+    const json = await r.json().catch(() => null)
+    const msg = detailMessage(json?.detail)
+    throw new ApiError(
+      r.status,
+      msg ?? (r.status >= 500 ? `A API está fora do ar ou falhou (${r.status}).` : `Erro ${r.status}.`),
+    )
+  }
   return r.json() as Promise<T>
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const r = await fetch(`/api${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!r.ok) throw new Error(`${r.status}`)
-  return r.json() as Promise<T>
-}
-
-async function del<T>(path: string): Promise<T> {
-  const r = await fetch(`/api${path}`, { method: 'DELETE' })
-  if (!r.ok) throw new Error(`${r.status}`)
-  return r.json() as Promise<T>
-}
+const get = <T,>(path: string) => request<T>('GET', path)
+const post = <T,>(path: string, body: unknown) => request<T>('POST', path, body)
+const del = <T,>(path: string) => request<T>('DELETE', path)
 
 export const api = {
   stats: () => get<Record<string, number>>('/stats'),

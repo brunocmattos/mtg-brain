@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import type { DeckAnalysisData, DeckCombo, Health } from '../api'
+import { ColorPips } from './Mana'
 
 const SEV_COLOR: Record<string, string> = {
   alto: 'text-red-400', medio: 'text-amber-400', baixo: 'text-sky-400', ok: 'text-green-400',
@@ -34,13 +35,6 @@ function BrFlag() {
 }
 
 const CURVE_KEYS = ['0', '1', '2', '3', '4', '5', '6', '7+']
-const PIP: Record<string, string> = {
-  W: '#f4f1d8',
-  U: '#1f6dab',
-  B: '#2b2230',
-  R: '#d3202a',
-  G: '#1a7b48',
-}
 const BRACKET_COLOR: Record<number, string> = {
   2: 'text-green-400',
   3: 'text-sky-400',
@@ -54,17 +48,6 @@ const TYPE_PT: Record<string, string> = {
 }
 const typePt = (t: string) => TYPE_PT[t] ?? t
 
-function Pips({ colors }: { colors: string[] }) {
-  if (colors.length === 0) return <span className="text-xs text-muted">incolor</span>
-  return (
-    <span className="inline-flex gap-1">
-      {colors.map((c) => (
-        <span key={c} className="w-3.5 h-3.5 rounded-full border border-border" style={{ background: PIP[c] }} />
-      ))}
-    </span>
-  )
-}
-
 function ManaCurve({ curve }: { curve: Record<string, number> }) {
   const max = Math.max(1, ...CURVE_KEYS.map((k) => curve[k] ?? 0))
   return (
@@ -73,12 +56,12 @@ function ManaCurve({ curve }: { curve: Record<string, number> }) {
         const v = curve[k] ?? 0
         return (
           <div key={k} className="flex-1 flex flex-col items-center justify-end h-full">
-            <span className="text-[10px] text-muted">{v}</span>
+            <span className="text-xs text-muted">{v}</span>
             <div
               className="w-full bg-primary rounded-t"
               style={{ height: `${(v / max) * 100}%`, minHeight: v > 0 ? '3px' : '0' }}
             />
-            <span className="text-[10px] text-muted mt-1">{k}</span>
+            <span className="text-xs text-muted mt-1">{k}</span>
           </div>
         )
       })}
@@ -94,9 +77,9 @@ function Stat({ label, h }: { label: string; h: Health }) {
           : 'text-sky-400'
   return (
     <div className="bg-surface-2 rounded p-2">
-      <div className="text-[11px] text-muted">{label}</div>
+      <div className="text-xs text-muted">{label}</div>
       <div className={`text-lg font-semibold ${color}`}>{h.value}</div>
-      <div className="text-[10px] text-muted">
+      <div className="text-xs text-muted">
         alvo {h.alvo} · {h.status}
       </div>
     </div>
@@ -134,7 +117,7 @@ function ComboItem({ c }: { c: DeckCombo }) {
             href={`https://commanderspellbook.com/combo/${c.id}/`}
             target="_blank"
             rel="noreferrer"
-            className="text-primary hover:underline inline-block"
+            className="text-link hover:underline inline-block"
           >
             Commander Spellbook ↗
           </a>
@@ -169,12 +152,12 @@ function RpgSheet({ at }: { at: DeckAnalysisData['attributes'] }) {
   return (
     <div className="rounded bg-surface-2 p-3">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] uppercase tracking-wide text-muted">🎲 Ficha do Deck</span>
+        <span className="text-xs uppercase tracking-wide text-muted">🎲 Ficha do Deck</span>
         <span className="cursor-help text-xs text-muted" title="Atributos estilo RPG (0-100), heurísticos a partir da composição do deck — NÃO é taxa de vitória. Eixos baseados em como a comunidade avalia decks (velocidade/turn-count, resiliência, redundância, sinergia, interação) + base de mana (Karsten).">ⓘ</span>
       </div>
       <div className="flex items-baseline gap-2">
         <span className="text-sm font-semibold text-accent">{at.classe}</span>
-        <span className="text-[11px] text-muted">· destaque: {at.destaque} · média {at.media}</span>
+        <span className="text-xs text-muted">· destaque: {at.destaque} · média {at.media}</span>
       </div>
       <div className="mt-2 flex items-center gap-3">
         <svg viewBox="0 0 200 200" className="h-40 w-40 shrink-0" aria-label="radar de atributos">
@@ -200,7 +183,7 @@ function RpgSheet({ at }: { at: DeckAnalysisData['attributes'] }) {
         <div className="flex-1 space-y-1">
           {order.map((a) => (
             <div key={a.key} title={a.detail}>
-              <div className="flex justify-between text-[11px]">
+              <div className="flex justify-between text-xs">
                 <span>{a.icon} {a.label} <span className="text-muted">{a.rpg}</span></span>
                 <span className="text-muted">{a.score}</span>
               </div>
@@ -234,8 +217,8 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold">Análise</h3>
         <div className="text-right leading-tight">
-          <select value={source} onChange={(e) => pickSource(e.target.value)} title="fonte de preço"
-            className="mb-0.5 rounded border border-border bg-surface px-1 py-0.5 text-[10px] text-muted outline-none">
+          <select value={source} onChange={(e) => pickSource(e.target.value)} aria-label="Fonte de preço"
+            className="mb-0.5 rounded border border-border-strong bg-surface px-1 py-0.5 text-xs text-muted">
             {SRC.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
           {sel.cur === 'usd' ? (
@@ -249,17 +232,17 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
             <div className="text-lg font-semibold text-accent">{amount.toFixed(2)} tix</div>
           )}
           {sel.key === 'manapool' ? (
-            <div className="text-[10px] text-muted" title="ManaPool é um preço por nome de carta (o mais barato), não por edição — trocar a arte não altera esse total.">por nome · já o mais barato (não muda com a arte)</div>
+            <div className="text-xs text-muted" title="ManaPool é um preço por nome de carta (o mais barato), não por edição — trocar a arte não altera esse total.">por nome · já o mais barato (não muda com a arte)</div>
           ) : diff > 0.005 ? (
-            <div className="text-[10px] text-muted" title="Valor base = somando a impressão mais barata de cada carta. A diferença vem das artes/edições que você escolheu.">
+            <div className="text-xs text-muted" title="Valor base = somando a impressão mais barata de cada carta. A diferença vem das artes/edições que você escolheu.">
               base {fmtCur(amountBase)} <span className="text-emerald-400">· +{fmtCur(diff)} nas suas versões</span>
             </div>
           ) : (
-            <div className="text-[10px] text-muted" title="Seu deck já está no valor base — nenhuma carta tem uma versão mais cara escolhida.">= base (já o mais barato)</div>
+            <div className="text-xs text-muted" title="Seu deck já está no valor base — nenhuma carta tem uma versão mais cara escolhida.">= base (já o mais barato)</div>
           )}
         </div>
       </div>
-      <div className="-mt-3 text-right text-[10px] text-muted" title="preços por fonte (terrenos básicos não contam)">
+      <div className="-mt-3 text-right text-xs text-muted" title="preços por fonte (terrenos básicos não contam)">
         ManaPool {usd(a.price_manapool)} · TCGplayer {usd(a.price_usd)} · Cardmarket {eur(a.price_eur)} · MTGO {a.price_tix.toFixed(2)} tix
         {fx?.source === 'fallback' ? ' · câmbio aprox.' : ''}
       </div>
@@ -267,7 +250,7 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
       {a.power && (
         <div className="rounded bg-surface-2 p-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-wide text-muted">Poder &amp; Consistência</span>
+            <span className="text-xs uppercase tracking-wide text-muted">Poder &amp; Consistência</span>
             <span className="cursor-help text-xs text-muted" title="Estimativa de quão bem montado/forte o deck está — NÃO é taxa de vitória (não modela oponentes, pilotagem nem sorte).">ⓘ</span>
           </div>
           <div className="flex items-baseline gap-2">
@@ -278,7 +261,7 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
           <div className="mt-2 space-y-1.5">
             {a.power.axes.map((ax) => (
               <div key={ax.key} title={ax.detail}>
-                <div className="flex justify-between text-[11px]">
+                <div className="flex justify-between text-xs">
                   <span>{ax.label}</span>
                   <span className="text-muted">{ax.score.toFixed(1)}/10</span>
                 </div>
@@ -288,10 +271,10 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
               </div>
             ))}
           </div>
-          <div className="mt-2 text-[10px] text-muted">
+          <div className="mt-2 text-xs text-muted">
             {a.power.verdict} <span className="opacity-70">Estimativa de construção, não taxa de vitória.</span>
           </div>
-          {a.power.note && <div className="mt-1 text-[10px] text-amber-400">{a.power.note}</div>}
+          {a.power.note && <div className="mt-1 text-xs text-amber-400">{a.power.note}</div>}
         </div>
       )}
 
@@ -301,7 +284,7 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
       <div className="space-y-1 text-xs">
         <div className="flex items-center gap-2">
           <span className="text-muted">Identidade:</span>
-          <Pips colors={a.identity} />
+          <ColorPips colors={a.identity} />
         </div>
         <div className={comp.complete && comp.has_commander && comp.off_color.length === 0 ? 'text-green-400' : 'text-amber-400'}>
           {comp.total} de 100 cartas{comp.total < 100 ? ` (faltam ${100 - comp.total})` : ''} · {comp.has_commander ? 'tem comandante' : 'SEM comandante'}
@@ -314,16 +297,16 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
 
       {/* bracket */}
       <div className="bg-surface-2 rounded p-2">
-        <div className="text-[11px] text-muted">Bracket estimado</div>
+        <div className="text-xs text-muted">Bracket estimado</div>
         <div className={`text-base font-semibold ${BRACKET_COLOR[a.bracket.level] ?? 'text-text'}`}>
           {a.bracket.level} · {a.bracket.name}
         </div>
-        <div className="text-[10px] text-muted">{a.bracket.reason}</div>
+        <div className="text-xs text-muted">{a.bracket.reason}</div>
         {a.bracket.note && (
-          <div className="text-[10px] text-amber-400/90 mt-1">⚠ {a.bracket.note}</div>
+          <div className="text-xs text-amber-400/90 mt-1">⚠ {a.bracket.note}</div>
         )}
         {a.game_changers.length > 0 && (
-          <div className="text-[10px] text-muted mt-1">Game changers: {a.game_changers.join(', ')}</div>
+          <div className="text-xs text-muted mt-1">Game changers: {a.game_changers.join(', ')}</div>
         )}
       </div>
 
@@ -348,7 +331,7 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
         <div>
           <div className="text-xs text-muted mb-1">O que falta / pontos fracos</div>
           {a.interaction_detail && (
-            <div className="mb-1.5 text-[10px] text-muted">
+            <div className="mb-1.5 text-xs text-muted">
               Interação: {a.interaction_detail.total} total · <span className="text-text">{a.interaction_detail.instant_speed} em velocidade de instante</span> · {a.interaction_detail.wipes} wipes · {a.interaction_detail.counters} counters
             </div>
           )}
@@ -364,7 +347,7 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
       )}
 
       <div>
-        <div className="text-xs text-muted mb-1">Tipos</div>
+        <div className="text-xs text-muted mb-1">Tipos (o comandante conta no tipo dele)</div>
         <div className="flex flex-wrap gap-1 text-xs">
           {Object.entries(a.types).map(([t, n]) => (
             <span key={t} className="bg-surface-2 rounded px-2 py-0.5">
@@ -388,10 +371,10 @@ export default function DeckAnalysis({ analysis: a }: { analysis: DeckAnalysisDa
       )}
 
       {a.missing_price.length > 0 && (
-        <div className="text-[10px] text-muted">{a.missing_price.length} carta(s) sem preço de mercado.</div>
+        <div className="text-xs text-muted">{a.missing_price.length} carta(s) sem preço de mercado.</div>
       )}
 
-      <p className="text-[10px] text-muted border-t border-border pt-2">
+      <p className="text-xs text-muted border-t border-border pt-2">
         Bracket e limiares de saúde são estimativas (heurística), não veredito oficial.
       </p>
     </div>

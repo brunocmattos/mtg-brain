@@ -1,10 +1,11 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import CommanderCard from '../components/CommanderCard'
 import CardDetailModal from '../components/CardDetailModal'
-
-const COLORS = ['W', 'U', 'B', 'R', 'G']
+import { ColorFilter } from '../components/Mana'
+import { EmptyState, ErrorState, Loading } from '../components/States'
+import { useDebounced } from '../hooks'
 
 export default function CommandersPage() {
   const [theme, setTheme] = useState('')
@@ -15,7 +16,9 @@ export default function CommandersPage() {
   const [selected, setSelected] = useState<string | null>(null)
 
   // só manda o filtro se for um número válido (evita 422 com "1.2.3" ou NaN com ".")
-  const price = maxPrice && Number.isFinite(Number(maxPrice)) ? Number(maxPrice) : undefined
+  // debounce: sem ele cada tecla do preço disparava uma busca
+  const maxPriceDeb = useDebounced(maxPrice)
+  const price = maxPriceDeb && Number.isFinite(Number(maxPriceDeb)) ? Number(maxPriceDeb) : undefined
 
   // busca ao vivo (sem precisar dar Enter)
   useEffect(() => {
@@ -23,8 +26,9 @@ export default function CommandersPage() {
     return () => clearTimeout(t)
   }, [theme])
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isPlaceholderData } = useQuery({
     queryKey: ['commanders', submitted, colors, price, sort],
+    placeholderData: keepPreviousData,
     queryFn: () =>
       submitted
         ? api.recommendCommanders(submitted, colors, price, sort)
@@ -35,8 +39,6 @@ export default function CommandersPage() {
     e.preventDefault()
     setSubmitted(theme.trim())
   }
-  const toggle = (c: string) =>
-    setColors((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]))
 
   return (
     <div>
@@ -51,34 +53,23 @@ export default function CommandersPage() {
           value={theme}
           onChange={(e) => setTheme(e.target.value)}
           placeholder="tema (opcional)"
-          className="bg-surface border border-border rounded-md px-3 py-2 text-sm flex-1 min-w-44 outline-none focus:border-primary"
+          aria-label="Tema"
+          className="bg-surface border border-border-strong rounded-md px-3 py-2 text-sm flex-1 min-w-44 focus:border-primary"
         />
-        <div className="flex gap-1">
-          {COLORS.map((c) => (
-            <button
-              type="button"
-              key={c}
-              onClick={() => toggle(c)}
-              className={`w-9 h-9 rounded-md border text-sm font-bold ${
-                colors.includes(c) ? 'border-accent bg-surface-2 text-text' : 'border-border text-muted'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
+        <ColorFilter value={colors} onChange={setColors} />
         <input
           value={maxPrice}
           onChange={(e) => setMaxPrice(e.target.value.replace(/[^0-9.]/g, ''))}
           placeholder="máx US$"
+          aria-label="Preço máximo em US$"
           inputMode="decimal"
-          className="bg-surface border border-border rounded-md px-3 py-2 text-sm w-24 outline-none focus:border-primary"
+          className="bg-surface border border-border-strong rounded-md px-3 py-2 text-sm w-24 focus:border-primary"
         />
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          title="Ordenar"
-          className="bg-surface border border-border rounded-md px-2 py-2 text-sm outline-none"
+          aria-label="Ordenar"
+          className="bg-surface border border-border-strong rounded-md px-2 py-2 text-sm"
         >
           <option value="edhrec">Popularidade</option>
           <option value="price_asc">Preço ↑</option>
@@ -102,14 +93,16 @@ export default function CommandersPage() {
         )}
       </form>
 
-      {isLoading && <p className="text-muted">Carregando…</p>}
-      {error && <p className="text-red-400">Erro ao buscar. O backend está rodando em :8000?</p>}
-      {data && data.length === 0 && <p className="text-muted">Nada encontrado.</p>}
+      {isLoading && <Loading />}
+      {error && <ErrorState error={error} title="Erro ao buscar comandantes" onRetry={() => refetch()} />}
+      {data && data.length === 0 && (
+        <EmptyState icon="🔍" title="Nenhum comandante com esses filtros" hint="Tente outro tema, menos cores ou um preço máximo maior." />
+      )}
       {data && data.length > 0 && (
         <p className="text-muted text-xs mb-2">{data.length} comandante(s)</p>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 transition-opacity ${isPlaceholderData ? 'opacity-60' : ''}`}>
         {data?.map((c) => (
           <CommanderCard key={c.id} c={c} onClick={() => setSelected(c.id)} />
         ))}
