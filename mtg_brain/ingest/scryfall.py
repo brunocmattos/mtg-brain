@@ -3,9 +3,10 @@
 Cartas e rulings vêm dos arquivos *bulk* (baixados 1x/dia e processados localmente),
 conforme recomendado pelo Scryfall. Sets e catálogos são pequenos e vêm da API ao vivo.
 """
+import gzip
+import json
 import os
 
-import ijson
 from psycopg.types.json import Jsonb
 
 from .. import config, db, http
@@ -45,20 +46,33 @@ def _int(value):
     return int(value) if value is not None else None
 
 
+# Não são cartas de jogo e colidem por nome com cartas reais (token "Ornithopter").
+SKIP_LAYOUTS = {"token", "double_faced_token", "emblem", "art_series"}
+
+
 def _card_row(c):
+    if c.get("layout") in SKIP_LAYOUTS:
+        return None
+    # 2+ faces (transform, MDFC, split, adventure…): o Scryfall deixa texto/custo/corpo
+    # só nas faces — sem isso a análise e as buscas não enxergam ~800 cartas.
+    faces = c.get("card_faces") or [{}]
+    front = faces[0]
+    text = c.get("oracle_text")
+    if text is None and c.get("card_faces"):
+        text = "\n//\n".join(f.get("oracle_text") or "" for f in faces)
     return {
         "id": c.get("id"),
         "oracle_id": c.get("oracle_id"),
         "name": c.get("name"),
         "lang": c.get("lang"),
         "released_at": c.get("released_at") or None,
-        "mana_cost": c.get("mana_cost"),
+        "mana_cost": c.get("mana_cost") or front.get("mana_cost"),
         "cmc": c.get("cmc"),
         "type_line": c.get("type_line"),
-        "oracle_text": c.get("oracle_text"),
-        "power": c.get("power"),
-        "toughness": c.get("toughness"),
-        "loyalty": c.get("loyalty"),
+        "oracle_text": text,
+        "power": c.get("power") or front.get("power"),
+        "toughness": c.get("toughness") or front.get("toughness"),
+        "loyalty": c.get("loyalty") or front.get("loyalty"),
         "colors": c.get("colors"),
         "color_identity": c.get("color_identity"),
         "keywords": c.get("keywords"),
@@ -80,8 +94,17 @@ def _bulk_uri(bulk_type):
     meta = http.get_json(BULK_META)
     for entry in meta["data"]:
         if entry["type"] == bulk_type:
-            return entry["download_uri"]
+            # desde ~nov/2026 o Scryfall só publica JSON Lines gzipado (sem download_uri)
+            return entry["jsonl_download_uri"]
     raise ValueError(f"bulk type '{bulk_type}' não encontrado no Scryfall")
+
+
+def _iter_bulk(path):
+    """Um objeto por linha do .jsonl.gz, em streaming (não carrega o arquivo inteiro)."""
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                yield json.loads(line)
 
 
 def _stream_bulk(bulk_type, filename, upsert_sql, row_fn):
@@ -89,10 +112,12 @@ def _stream_bulk(bulk_type, filename, upsert_sql, row_fn):
     dest = os.path.join(config.DATA_DIR, filename)
     http.download(uri, dest)
     total, buf = 0, []
-    with db.connect() as conn, open(dest, "rb") as f:
-        # use_float=True evita ijson devolver Decimal (que quebraria o json.dumps do jsonb)
-        for obj in ijson.items(f, "item", use_float=True):
-            buf.append(row_fn(obj))
+    with db.connect() as conn:
+        for obj in _iter_bulk(dest):
+            row = row_fn(obj)
+            if row is None:
+                continue
+            buf.append(row)
             if len(buf) >= 1000:
                 total += db.upsert_batch(conn, upsert_sql, buf)
                 buf.clear()
@@ -102,7 +127,17 @@ def _stream_bulk(bulk_type, filename, upsert_sql, row_fn):
 
 
 def ingest_cards():
-    return _stream_bulk("oracle_cards", "oracle_cards.json", CARD_UPSERT, _card_row)
+    """Upsert do bulk + remove o que o bulk não trouxe mais (tokens, impressão
+    representativa que o Scryfall trocou — senão o nome fica duplicado na tabela)."""
+    with db.connect() as conn:
+        run_start = conn.execute("SELECT now()").fetchone()[0]
+    total = _stream_bulk("oracle_cards", "oracle_cards.jsonl.gz", CARD_UPSERT, _card_row)
+    if total < 20000:  # bulk truncado/vazio: não apaga o banco inteiro por engano
+        raise RuntimeError(f"bulk com só {total} cartas — limpeza de órfãs abortada")
+    with db.connect() as conn:
+        gone = conn.execute("DELETE FROM cards WHERE ingested_at < %s", (run_start,)).rowcount
+    print(f"    removidas (fora do bulk): {gone}")
+    return total
 
 
 # --------------------------------------------------------------------------- rulings
@@ -124,7 +159,7 @@ def _ruling_row(r):
 
 
 def ingest_rulings():
-    return _stream_bulk("rulings", "rulings.json", RULING_UPSERT, _ruling_row)
+    return _stream_bulk("rulings", "rulings.jsonl.gz", RULING_UPSERT, _ruling_row)
 
 
 # ------------------------------------------------------------------------------ sets
@@ -186,18 +221,17 @@ def ingest_prices():
     ela vem sem usd. Aqui pegamos o MENOR usd de QUALQUER impressão (bulk default_cards)
     e preenchemos cards.prices->>'usd' onde está faltando."""
     uri = _bulk_uri("default_cards")
-    dest = os.path.join(config.DATA_DIR, "default_cards.json")
+    dest = os.path.join(config.DATA_DIR, "default_cards.jsonl.gz")
     http.download(uri, dest)
     best = {}
-    with open(dest, "rb") as f:
-        for c in ijson.items(f, "item", use_float=True):
-            name = c.get("name")
-            usd = (c.get("prices") or {}).get("usd") if name else None
-            if usd is None:
-                continue
-            usd = float(usd)
-            if name not in best or usd < best[name]:
-                best[name] = usd
+    for c in _iter_bulk(dest):
+        name = c.get("name")
+        usd = (c.get("prices") or {}).get("usd") if name else None
+        if usd is None:
+            continue
+        usd = float(usd)
+        if name not in best or usd < best[name]:
+            best[name] = usd
     with db.connect() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT id, name FROM cards WHERE (prices->>'usd') IS NULL")

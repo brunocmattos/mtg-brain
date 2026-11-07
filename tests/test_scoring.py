@@ -271,6 +271,11 @@ def test_deck_bracket_level4_mld_e_extra_turns():
     r_mld = _deck_bracket(gc=[], two_card_combos=0, mld=True, extra_turns=False,
                           total_combos=0)
     assert r_mld["level"] == 4
-    r_extra = _deck_bracket(gc=[], two_card_combos=0, mld=False, extra_turns=True,
-                            total_combos=0)
-    assert r_extra["level"] == 4
+
+
+
+def test_deck_bracket_extra_turn_card_is_note_not_bracket4():
+    # WotC proíbe ENCADEAR turnos extras nos brackets 1-3, não ter uma carta (Time Warp)
+    r = _deck_bracket(gc=[], two_card_combos=0, mld=False, extra_turns=True, total_combos=0)
+    assert r["level"] == 2
+    assert "turno" in r["note"]

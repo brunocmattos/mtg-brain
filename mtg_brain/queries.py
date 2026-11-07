@@ -62,9 +62,11 @@ def _jsonable(row):
     return out
 
 
-def _rows(sql, params=None):
+def _rows(sql, params=None, pre=()):
     with db.connect() as conn:
         with conn.cursor() as cur:
+            for stmt in pre:  # SET LOCAL da mesma transação (ex.: knobs do pgvector)
+                cur.execute(stmt)
             cur.execute(sql, params or {})
             cols = [d.name for d in cur.description]
             data = [dict(zip(cols, r)) for r in cur.fetchall()]
@@ -131,7 +133,11 @@ def semantic_search(q, limit=40):
     # 1) recupera CANDIDATOS (mais que o limite) via híbrido; 2) reordena com o
     # cross-encoder (lê query+carta juntos -> entende intenção composta).
     cand = max(_limit(limit), 100)
-    rows = _rows(sql, {"v": lit, "q": q, "cand": cand})
+    # HNSW aplica o filtro de legalidade DEPOIS do índice: com ef_search=40 a metade
+    # vetorial voltava ~40 candidatos, não 150. Scan iterativo (pgvector 0.8) completa.
+    rows = _rows(sql, {"v": lit, "q": q, "cand": cand},
+                 pre=("SET LOCAL hnsw.iterative_scan = relaxed_order",
+                      "SET LOCAL hnsw.ef_search = 200"))
     if not rows:
         return []
     docs = [". ".join(p for p in (r.get("name"), r.get("type_line"), r.get("oracle_text")) if p)
@@ -276,6 +282,24 @@ def add_card(deck_id, card_name, qty=1, is_commander=False):
     return {"ok": True}
 
 
+def _allows_multiple(name, oracle_text):
+    """Commander é singleton; só básicos e 'a deck can have any number/up to N cards named'."""
+    return name in BASIC_LAND_NAMES or "deck can have" in (oracle_text or "").lower()
+
+
+def add_one(deck_id, card_name):
+    """+1 manual pela UI: recusa 2ª cópia de carta singleton. None se o deck não existe."""
+    if not _rows("SELECT 1 FROM decks WHERE id=%(d)s", {"d": deck_id}):
+        return None
+    have = _rows("SELECT 1 FROM deck_cards WHERE deck_id=%(d)s AND card_name=%(n)s",
+                 {"d": deck_id, "n": card_name})
+    if have:
+        card = _rows("SELECT oracle_text FROM cards WHERE name=%(n)s LIMIT 1", {"n": card_name})
+        if not _allows_multiple(card_name, card[0]["oracle_text"] if card else None):
+            return {"ok": False, "error": f"{card_name} já está no deck (Commander é singleton)."}
+    return add_card(deck_id, card_name, 1, False)
+
+
 def remove_card(deck_id, card_name):
     # Remove UMA cópia (simétrico ao add +1): qty>1 decrementa, qty<=1 apaga a linha.
     # (antes apagava todas as cópias de uma vez — perda de dado em básicos com qty alto.)
@@ -361,12 +385,15 @@ def set_guide(deck_id, guide):
 # ---- Importador de decklist (colar texto do Moxfield/Archidekt/etc.) ----
 
 _CARD_LINE = re.compile(r"^\s*(\d+)\s*[xX]?\s+(.+?)\s*$")
-_SECTION_SKIP = ("sideboard", "maybeboard", "maybe", "considering", "tokens", "token", "outside")
+_SECTION_SKIP = ("sideboard", "maybeboard", "maybe", "considering", "tokens", "token", "outside",
+                 "companion")  # companion fica fora das 100
 
 
 def _clean_card_name(name):
     # ORDEM IMPORTA: tira foil/#num PRIMEIRO; só então " (SET) 123" (ancorado no fim),
     # senão o "*F*" no fim impede o strip do set e a carta vira 'missing'.
+    name = re.sub(r"\s*\^[^^]*\^\s*$", "", name)         # Archidekt: "^Have,#37d67d^"
+    name = re.sub(r"\s*\[[^\]]*\]\s*$", "", name)        # Archidekt: "[Ramp,Commander{top}]"
     name = re.sub(r"\s*\*[A-Za-z]\*\s*$", "", name)      # marcador de foil/etched "*F*"
     name = re.sub(r"\s+#\d+\s*$", "", name)              # "#123" do fim
     name = re.sub(r"\s*\([^)]*\)\s*\S*\s*$", "", name)   # " (SET) 123" do fim
@@ -397,25 +424,31 @@ def _parse_decklist(text):
             continue
         name = _clean_card_name(m.group(2))
         if name:
+            # Archidekt marca o comandante com a tag "[Commander{top}]" em vez de seção
+            tagged = re.search(r"\[[^\]]*\bcommander\b", m.group(2), re.I) is not None
             items.append({"qty": int(m.group(1)), "name": name,
-                          "is_commander": section == "commander"})
+                          "is_commander": section == "commander" or tagged})
     return items
 
 
-_EXACT = "SELECT name FROM cards WHERE name = %(n)s ORDER BY (layout='token') LIMIT 1"
+_EXACT = ("SELECT name FROM cards WHERE name = %(n)s "
+          "ORDER BY (legalities->>'commander') = 'legal' DESC LIMIT 1")
 _CI = ("SELECT name FROM cards WHERE lower(name) = lower(%(n)s) "
-       "ORDER BY (layout='token'), edhrec_rank NULLS LAST LIMIT 1")
+       "ORDER BY (legalities->>'commander') = 'legal' DESC, edhrec_rank NULLS LAST LIMIT 1")
+# sem acento (decklists e teclados costumam perder: "Seance", "Lim-Dul's Vault")
+_NOACCENT = ("SELECT name FROM cards WHERE unaccent(lower(name)) = unaccent(lower(%(n)s)) "
+             "ORDER BY (legalities->>'commander') = 'legal' DESC, edhrec_rank NULLS LAST LIMIT 1")
 
 
 def _resolve_card_name(name):
-    """Casa o nome lido com o nome canônico no banco. Prefere impressão real
-    (layout<>'token') e NÃO usa o nome do usuário como padrão LIKE (curingas '_'/'%').
+    """Casa o nome lido com o nome canônico no banco. Prefere a carta legal em Commander
+    (há cartas de playtest com o mesmo nome) e NÃO usa o nome do usuário como padrão LIKE (curingas '_'/'%').
     Trata dupla-face: Moxfield exporta "A / B" (barra simples), o banco usa "A // B"."""
     def first(sql, val):
         r = _rows(sql, {"n": val})
         return r[0]["name"] if r else None
 
-    hit = first(_EXACT, name) or first(_CI, name)
+    hit = first(_EXACT, name) or first(_CI, name) or first(_NOACCENT, name)
     if hit:
         return hit
     # "A / B" (Moxfield) -> "A // B" (banco)
@@ -463,7 +496,8 @@ def import_deck(deck_name, text, commander=None):
     for r in resolved:
         if cmd_name and r["name"] == cmd_name:
             continue
-        add_card(deck["id"], r["name"], r["qty"], False)
+        # partner/background: o 2º comandante também fica marcado
+        add_card(deck["id"], r["name"], r["qty"], r["is_commander"])
 
     total = sum(r["qty"] for r in resolved) + (1 if cmd_name and cmd_name not in agg else 0)
     return {
@@ -483,7 +517,7 @@ def _deck_cards(deck_id):
     return _rows(f"""
         SELECT dc.card_name AS name, dc.qty, dc.is_commander, c.id::text AS id,
                c.type_line, c.cmc, c.mana_cost, c.color_identity, c.oracle_text,
-               c.produced_mana,
+               c.produced_mana, c.game_changer,
                COALESCE((dc.printing->>'usd')::numeric, p.usd) AS usd,
                COALESCE((dc.printing->>'eur')::numeric, p.eur) AS eur,
                COALESCE((dc.printing->>'tix')::numeric, p.tix) AS tix,
@@ -496,9 +530,11 @@ def _deck_cards(deck_id):
         LEFT JOIN LATERAL (
             SELECT id, type_line, cmc, mana_cost, color_identity, oracle_text,
                    data->'produced_mana' AS produced_mana,
+                   (data->>'game_changer')::boolean AS game_changer,
                    {_img('normal')} AS image, {_img('art_crop')} AS art_crop
             FROM cards WHERE name = dc.card_name
-            ORDER BY (prices->>'usd')::numeric ASC NULLS LAST LIMIT 1
+            ORDER BY (legalities->>'commander') = 'legal' DESC,
+                     (prices->>'usd')::numeric ASC NULLS LAST LIMIT 1
         ) c ON true
         LEFT JOIN LATERAL (
             -- preço mais barato DISPONÍVEL em cada moeda (independente), senão eur/tix
@@ -547,24 +583,38 @@ BASIC_LAND_NAMES = {
 }
 
 
+_LAND_WORDS = r"(?:land|forest|island|swamp|mountain|plains)"
+# busca que põe terreno em jogo/na mão (Nature's Lore diz "Forest card", não "land")
+_LAND_SEARCH = re.compile(r"search your library for [^.]*?\b" + _LAND_WORDS + r"s?\b")
+_EXTRA_MANA = re.compile(r"adds? an additional \{|play (?:an|two|three) additional lands?")
+
+
 def _is_ramp(bucket, text):
     if bucket == "land":
         return False
     t = (text or "").lower()
     if "add {" in t or "add one mana" in t or "add two mana" in t or "add three mana" in t:
         return True
-    if "search your library for" in t and "land" in t:
-        return True
-    return False
+    return bool(_LAND_SEARCH.search(t) or _EXTRA_MANA.search(t))
+
+
+# "opponent draws" é o oponente comprando (Smothering Tithe), não compra sua
+_DRAW = re.compile(r"(?<!opponent )draws? (?:up to )?\w+ cards?|draws? cards")
 
 
 def _is_draw(text):
-    t = (text or "").lower()
-    return bool(re.search(r"draws? \w+ cards?", t)) or "draw cards" in t or "draws cards" in t
+    return bool(_DRAW.search((text or "").lower()))
 
 
+# Remoção pontual. "return target/all" só conta como bounce (pra mão do dono) —
+# senão Regrowth/Eternal Witness (recursão) viravam interação.
 _INTERACTION = ("destroy target", "destroy all", "destroy each", "exile target",
-                "exile all", "counter target", "return target", "return all")
+                "counter target")
+_REMOVAL = re.compile(
+    r"return (?:target|all|each) [^.]*?to (?:its|their) owner(?:'s|s')? hands?"
+    r"|deals \w+ damage to (?:any target|target (?:creature|planeswalker|attacking))"
+    r"|target creature gets -[\dx]"
+    r"|exile all (?!cards from)")
 
 # -X/-X coletivo: "creatures ... get -" (Toxic Deluge) OU "each creature gets -"
 # (The Meathook Massacre). "each creature"/"creatures" separa wipe de debuff de alvo
@@ -583,19 +633,29 @@ def _is_mass_removal(t):
 
 def _is_interaction(text):
     t = (text or "").lower()
-    return any(k in t for k in _INTERACTION) or _is_mass_removal(t)
+    return any(k in t for k in _INTERACTION) or bool(_REMOVAL.search(t)) or _is_mass_removal(t)
+
+
+_TUTOR = re.compile(r"search your library for (?:an? |up to \w+ )([^.]*?)cards?\b")
 
 
 def _is_tutor(text):
-    # tutores genéricos ("Search your library for a card") — não conta busca-terreno (isso é ramp)
-    return "search your library for a card" in (text or "").lower()
+    # busca de carta (Demonic, Worldly, Mystical, Buried Alive); busca-terreno é ramp
+    m = _TUTOR.search((text or "").lower())
+    return bool(m) and not re.search(r"\b" + _LAND_WORDS + r"\b", m.group(1))
+
+
+# Board wipe = some com criaturas/permanentes (Shatterstorm e hate de cemitério não são).
+_WIPE = re.compile(
+    r"(?:destroy|exile) (?:all|each) [^.]*?\b(?:creatures?|permanents?)\b(?! cards?)"
+    r"|damage to each creature"
+    r"|put all creatures"
+    r"|return all (?:creatures|nonland permanents)")
 
 
 def _is_wipe(text):
     t = (text or "").lower()
-    if "destroy all" in t or "exile all" in t or "destroy each" in t or "exile each" in t:
-        return True
-    return _is_mass_removal(t)
+    return bool(_WIPE.search(t)) or _is_mass_removal(t)
 
 
 def _is_counter(text):
@@ -603,7 +663,9 @@ def _is_counter(text):
 
 
 def _is_instant_speed(type_line, text):
-    return "instant" in (type_line or "").lower() or "flash" in (text or "").lower()
+    # \bflash\b: "Flashback" não dá velocidade de instante
+    return ("instant" in (type_line or "").lower()
+            or bool(re.search(r"\bflash\b", (text or "").lower())))
 
 
 def _is_recursion(text):
@@ -693,23 +755,6 @@ def _flag(value, low, high=None):
     return "ok"
 
 
-# Subconjunto da lista oficial "Game Changers" da WotC (Commander Brackets).
-# Aproximado — usado só como sinal pra estimar o bracket.
-GAME_CHANGERS = {
-    "Mana Crypt", "Mana Vault", "Jeweled Lotus", "Chrome Mox", "Mox Diamond",
-    "Grim Monolith", "Lion's Eye Diamond", "Ancient Tomb", "Gaea's Cradle",
-    "The Tabernacle at Pendrell Vale", "Mishra's Workshop", "Glacial Chasm",
-    "Demonic Tutor", "Vampiric Tutor", "Imperial Seal", "Grim Tutor",
-    "Enlightened Tutor", "Mystical Tutor", "Tainted Pact", "Demonic Consultation",
-    "Thassa's Oracle", "Underworld Breach", "Necropotence", "Ad Nauseam",
-    "Bolas's Citadel", "Cyclonic Rift", "Rhystic Study", "Mystic Remora",
-    "Smothering Tithe", "Esper Sentinel", "Trouble in Pairs", "Aura Shards",
-    "Opposition Agent", "Drannith Magistrate", "Notion Thief", "Consecrated Sphinx",
-    "Fierce Guardianship", "Deflecting Swat", "Gifts Ungiven", "Intuition",
-    "Expropriate", "Field of the Dead", "Grand Arbiter Augustin IV",
-}
-
-
 MASS_LAND_DENIAL = {
     "Armageddon", "Ravages of War", "Catastrophe", "Jokulhaups", "Obliterate",
     "Decree of Annihilation", "Wildfire", "Burning of Xinye", "Impending Disaster",
@@ -725,12 +770,15 @@ def _is_extra_turn(text):
     return "extra turn" in (text or "").lower()
 
 
+_WIN_RESULT = re.compile(r"\binfinite\b|\b(?:wins?|loses?) the game\b")
+
+
 def _is_win_combo(combo):
-    """Combo de 2 cartas que loopa/ganha — o que joga o deck pro bracket 4+."""
+    """Combo de 2 cartas que loopa/ganha — o que joga o deck pro bracket 4+.
+    O Spellbook escreve "Win the game" (sem s): o regex cobre as duas formas."""
     if len(combo["card_names"]) != 2:
         return False
-    txt = " ".join(combo.get("results") or []).lower()
-    return "infinite" in txt or "loses the game" in txt or "wins the game" in txt
+    return bool(_WIN_RESULT.search(" ".join(combo.get("results") or []).lower()))
 
 
 def _deck_bracket(gc, two_card_combos, mld, extra_turns, total_combos):
@@ -740,7 +788,8 @@ def _deck_bracket(gc, two_card_combos, mld, extra_turns, total_combos):
     *desde que* não montem antes do turno 6; proíbe MLD e encadeamento de turnos extras.
     Bracket 4 não tem restrição (além do banido).
 
-    Só dá pra detectar com CONFIANÇA o que joga pro 4: >3 game changers, MLD, turnos extras.
+    Só dá pra detectar com CONFIANÇA o que joga pro 4: >3 game changers e MLD. Carta de
+    turno extra sozinha é permitida — o proibido é ENCADEAR, que vira aviso (como combo).
     A velocidade do combo (antes/depois do turno 6) NÃO dá pra medir automaticamente — então
     combos de 2 cartas viram um AVISO, não um veredito."""
     hard = []
@@ -748,16 +797,18 @@ def _deck_bracket(gc, two_card_combos, mld, extra_turns, total_combos):
         hard.append(f"{len(gc)} game changers (bracket 3 permite até 3)")
     if mld:
         hard.append("destruição em massa de terrenos")
-    if extra_turns:
-        hard.append("encadeamento de turnos extras")
 
-    note = None
+    notes = []
     if two_card_combos:
-        note = (
+        notes.append(
             f"{two_card_combos} combo(s) de 2 cartas presente(s). Pela regra, se algum montar "
             "ANTES do turno 6 o deck é Bracket 4; combos tardios cabem no 3. A velocidade não dá "
             "pra calcular automaticamente — esse julgamento é seu."
         )
+    if extra_turns:
+        notes.append("Tem carta de turno extra: ter é permitido, mas encadear/loopar turnos "
+                     "extras é Bracket 4.")
+    note = " ".join(notes) or None
 
     if hard:
         return {"level": 4, "name": "Optimized (alto poder)",
@@ -770,7 +821,7 @@ def _deck_bracket(gc, two_card_combos, mld, extra_turns, total_combos):
             det.append(f"{total_combos} combo(s) presente(s)")
         return {"level": 3, "name": "Upgraded", "reason": "; ".join(det), "note": note}
     return {"level": 2, "name": "Core",
-            "reason": "sem game changers, combos, MLD ou turnos extras", "note": None}
+            "reason": "sem game changers, combos ou MLD", "note": note}
 
 
 # ---- Rank de Poder & Consistência (heurístico, NÃO é taxa de vitória) ----
@@ -996,16 +1047,16 @@ def deck_analysis(deck_id):
     predominant = max((t for t in types if t != "land"), key=lambda k: types[k], default=None)
     combos_present = combos_in_deck(pool)
 
-    cmd = next((r for r in cards if r["is_commander"]), None)
-    identity = (
-        sorted(cmd["color_identity"]) if (cmd and cmd["color_identity"])
-        else sorted({c for r in cards for c in (r["color_identity"] or [])})
-    )
+    cmds = [r for r in cards if r["is_commander"]]
+    cmd = cmds[0] if cmds else None
+    # identidade = união dos comandantes (partner); comandante incolor dá [] (Karn), não
+    # a união das cartas — só sem comandante é que se deduz pelas cartas.
+    identity = sorted({c for r in (cmds or cards) for c in (r["color_identity"] or [])})
     idset = set(identity)
     # Fontes de mana por cor pelo que a carta produz, não pela color identity (ver _mana_sources).
     colors = _mana_sources(cards, idset)
     off_color = sorted({r["name"] for r in cards if set(r["color_identity"] or []) - idset})
-    gc = sorted({r["name"] for r in cards if r["name"] in GAME_CHANGERS})
+    gc = sorted({r["name"] for r in cards if r.get("game_changer")})
     mld = any(_is_mld(r["name"], r["oracle_text"]) for r in cards)
     extra_turns = any(_is_extra_turn(r["oracle_text"]) for r in cards)
     two_card_win = sum(1 for c in combos_present if _is_win_combo(c))
@@ -1070,9 +1121,10 @@ def deck_analysis(deck_id):
     }
 
 
-def suggest_cards(commander_name, limit=40):
+def suggest_cards(commander_name, limit=40, deck_id=None):
     """Sugere cartas pro comandante: peças que dividem combo com ele primeiro,
-    depois dentro da identidade de cor + legais, ordenado por popularidade."""
+    depois dentro da identidade de cor + legais, ordenado por popularidade.
+    Com deck_id, pula o que o deck já tem."""
     base = _rows("SELECT color_identity FROM cards WHERE name = %(n)s LIMIT 1",
                  {"n": commander_name})
     if not base:
@@ -1088,11 +1140,12 @@ def suggest_cards(commander_name, limit=40):
           AND (legalities->>'commander') = 'legal'
           AND name <> %(cmd)s
           AND type_line NOT ILIKE '%%Basic Land%%'
+          AND name NOT IN (SELECT card_name FROM deck_cards WHERE deck_id = %(deck)s)
         ORDER BY (name = ANY(%(pieces)s)) DESC, edhrec_rank NULLS LAST
         LIMIT %(limit)s
     """
     return _rows(sql, {"pieces": pieces, "identity": identity, "cmd": commander_name,
-                       "limit": _limit(limit, 40, 100)})
+                       "deck": deck_id, "limit": _limit(limit, 40, 100)})
 
 
 def symbol_map():

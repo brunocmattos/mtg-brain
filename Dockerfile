@@ -13,6 +13,7 @@ RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-base
  && python -c "from fastembed.rerank.cross_encoder import TextCrossEncoder; TextCrossEncoder('Xenova/ms-marco-MiniLM-L-6-v2', cache_dir='/app/.fastembed_cache')"
 
 COPY mtg_brain/ ./mtg_brain/
+COPY db/ ./db/
 COPY web/dist/ ./web/dist/
 
 EXPOSE 8000

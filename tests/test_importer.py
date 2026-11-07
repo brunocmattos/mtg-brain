@@ -202,3 +202,28 @@ def test_parse_full_decklist_shape():
 def test_parse_returns_int_quantities():
     items = _parse_decklist("4 Island")
     assert isinstance(items[0]["qty"], int)
+
+
+# ============================== regressões da auditoria de 2026-11-07
+def test_clean_strips_archidekt_tags_and_color_label():
+    assert _clean_card_name("Sol Ring (c21) 263 [Ramp,Mana Rock]") == "Sol Ring"
+    assert _clean_card_name("Sol Ring (c21) 263 [Ramp] ^Have,#37d67d^") == "Sol Ring"
+
+
+def test_parse_archidekt_commander_tag():
+    items = _parse_decklist("1x Winota, Joiner of Forces (iko) 216 [Commander{top}]\n"
+                            "1x Sol Ring (c21) 263 [Ramp]")
+    assert items[0] == {"qty": 1, "name": "Winota, Joiner of Forces", "is_commander": True}
+    assert items[1] == {"qty": 1, "name": "Sol Ring", "is_commander": False}
+
+
+def test_parse_companion_section_is_outside_the_deck():
+    items = _parse_decklist("Companion\n1 Lurrus of the Dream-Den\n\nDeck\n1 Sol Ring")
+    assert [i["name"] for i in items] == ["Sol Ring"]
+
+
+def test_parse_partner_commanders_both_marked():
+    items = _parse_decklist("Commander\n1 Tymna the Weaver\n1 Thrasios, Triton Hero\n"
+                            "Deck\n1 Sol Ring")
+    assert [i["name"] for i in items if i["is_commander"]] == [
+        "Tymna the Weaver", "Thrasios, Triton Hero"]

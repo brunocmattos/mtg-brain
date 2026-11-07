@@ -267,11 +267,12 @@ function DeckView({ id, onBack }: { id: number; onBack: () => void }) {
   const [confirmDel, setConfirmDel] = useState(false)
   const [printingFor, setPrintingFor] = useState<DeckCardRow | null>(null)
   const search = useQuery({ queryKey: ['cardsearch', submitted], queryFn: () => api.searchCards(submitted), enabled: submitted.length > 0 })
-  const suggestions = useQuery({ queryKey: ['suggest', deck?.commander], queryFn: () => api.suggest(deck!.commander!), enabled: !!deck?.commander })
+  const suggestions = useQuery({ queryKey: ['suggest', id, deck?.commander], queryFn: () => api.suggest(deck!.commander!, id), enabled: !!deck?.commander })
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['deck', id] })
     qc.invalidateQueries({ queryKey: ['deck-analysis', id] })
+    qc.invalidateQueries({ queryKey: ['suggest', id] })
   }
   const clearSearch = () => {
     setQ('')

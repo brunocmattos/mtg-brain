@@ -46,7 +46,7 @@ O mtg-brain ingere praticamente *tudo* de Magic (cartas, preços, legalidades, r
                          ┌──────────────────────────────────────────┐
   FONTES                 │                 INGESTÃO (ETL)            │
   Scryfall (bulk, API)   │  mtg_brain/ingest/  — idempotente,        │
-  Commander Spellbook    │  resiliente a rate-limit, streaming ijson │
+  Commander Spellbook    │  resiliente a rate-limit, streaming JSONL │
   Comprehensive Rules    └───────────────────────┬──────────────────┘
   ManaPool (preços)                              │
                                                   ▼

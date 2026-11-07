@@ -238,8 +238,8 @@ export const api = {
   cardPrintings: (card: string) => get<Printing[]>(`/printings?card=${encodeURIComponent(card)}`),
   setPrinting: (deckId: number, cardName: string, printing: Printing | null) =>
     post<{ ok: boolean }>(`/decks/${deckId}/cards/printing`, { card_name: cardName, printing }),
-  suggest: (commander: string) =>
-    get<CardSummary[]>(`/commanders/suggest?commander=${encodeURIComponent(commander)}&limit=30`),
+  suggest: (commander: string, deckId: number) =>
+    get<CardSummary[]>(`/commanders/suggest?commander=${encodeURIComponent(commander)}&deck_id=${deckId}&limit=30`),
   symbols: () => get<Record<string, string>>('/symbols'),
   fx: () => get<FxRate>('/fx/usd-brl'),
 }

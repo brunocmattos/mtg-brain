@@ -59,7 +59,7 @@ Cartas dupla-face têm `image_uris` nulo no topo; o helper `_img()` faz *fallbac
 `mtg_brain/ingest/`. Propriedades:
 
 - **Idempotente** — tudo é `INSERT … ON CONFLICT DO UPDATE`. Rodar de novo = atualizar.
-- **Streaming** — o bulk de cartas (centenas de MB) é lido com `ijson` (`use_float=True`) sem carregar tudo na memória.
+- **Streaming** — o bulk de cartas (centenas de MB) é (JSON Lines gzipado) é lido linha a linha, sem carregar tudo na memória.
 - **Resiliente a rate-limit** — `combos` (Commander Spellbook, paginado) retoma do offset `floor(count/100)*100`, com *backoff* crescente e captura de quedas de conexão. Resultado típico: ~92 mil combos.
 - **Preços em duas etapas** — `cards` vem do bulk *oracle-cards* (1 impressão por carta); `ingest prices` depois preenche `usd`/`eur`/`tix` nulos a partir do bulk *default-cards*.
 - **ManaPool** — `ingest manapool` baixa o dump público da ManaPool (`/api/v1/prices/singles`, ~100k impressões), reduz ao menor preço NM por nome de carta e faz `TRUNCATE` + `COPY` na tabela `manapool_prices`. Os amigos do Bruno definem o teto de orçamento pelo preço ManaPool, por isso é a **fonte default** da análise.

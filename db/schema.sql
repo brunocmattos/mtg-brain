@@ -3,6 +3,7 @@
 -- com o objeto completo do Scryfall, pra nunca perdermos nenhum atributo.
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;  -- nomes sem acento na importação ("Seance")
 
 CREATE TABLE IF NOT EXISTS sets (
     code         text PRIMARY KEY,

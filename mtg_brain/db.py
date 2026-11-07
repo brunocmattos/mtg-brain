@@ -5,9 +5,9 @@ import psycopg
 
 from . import config
 
-SCHEMA_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "schema.sql"
-)
+_DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db")
+# ordem importa: schema_deck cria índices sobre cards/combos do schema base
+SCHEMA_PATHS = [os.path.join(_DB_DIR, f) for f in ("schema.sql", "schema_deck.sql")]
 
 TABLES = ["sets", "cards", "rulings", "keywords", "rules", "combos"]
 
@@ -17,11 +17,11 @@ def connect():
 
 
 def apply_schema():
-    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-        sql = f.read()
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql)
+            for path in SCHEMA_PATHS:
+                with open(path, "r", encoding="utf-8") as f:
+                    cur.execute(f.read())
         conn.commit()
 
 

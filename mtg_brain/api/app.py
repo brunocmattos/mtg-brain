@@ -10,7 +10,9 @@ from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from typing import Annotated
+
+from pydantic import BaseModel, Field
 
 from .. import db, fx, queries
 
@@ -125,7 +127,7 @@ class DeckCreate(BaseModel):
 
 class DeckCardBody(BaseModel):
     card_name: str
-    qty: int = 1
+    qty: int = Field(1, ge=1, le=99)
     is_commander: bool = False
 
 
@@ -135,9 +137,26 @@ class DeckImport(BaseModel):
     commander: str | None = None
 
 
+_Price = Annotated[str, Field(pattern=r"^\d+(\.\d+)?$")] | None
+_ScryImg = Annotated[str, Field(pattern=r"^https://cards\.scryfall\.io/")] | None
+
+
+class Printing(BaseModel):
+    # tipado: um "usd":"abc" gravado no jsonb quebrava o ::numeric e o deck dava 500 pra sempre
+    scryfall_id: str
+    set: str
+    set_name: str | None = None
+    collector_number: str | None = None
+    image: _ScryImg = None
+    art_crop: _ScryImg = None
+    usd: _Price = None
+    eur: _Price = None
+    tix: _Price = None
+
+
 class PrintingBody(BaseModel):
     card_name: str
-    printing: dict | None = None  # None = volta pra impressão padrão
+    printing: Printing | None = None  # None = volta pra impressão padrão
 
 
 class GuideBody(BaseModel):
@@ -177,12 +196,20 @@ def delete_deck(deck_id: int):
 
 @api.post("/decks/{deck_id}/cards")
 def add_card(deck_id: int, body: DeckCardBody):
-    return queries.add_card(deck_id, body.card_name, body.qty, body.is_commander)
+    if body.is_commander or body.qty != 1:
+        return queries.add_card(deck_id, body.card_name, body.qty, body.is_commander)
+    res = queries.add_one(deck_id, body.card_name)
+    if res is None:
+        raise HTTPException(status_code=404, detail="deck não encontrado")
+    if not res["ok"]:
+        raise HTTPException(status_code=409, detail=res["error"])
+    return res
 
 
 @api.post("/decks/{deck_id}/cards/printing")
 def set_printing(deck_id: int, body: PrintingBody):
-    return queries.set_printing(deck_id, body.card_name, body.printing)
+    p = body.printing.model_dump() if body.printing else None
+    return queries.set_printing(deck_id, body.card_name, p)
 
 
 @api.put("/decks/{deck_id}/guide")
@@ -204,8 +231,8 @@ def deck_analysis(deck_id: int):
 
 
 @api.get("/commanders/suggest")
-def suggest(commander: str, limit: int = 40):
-    return queries.suggest_cards(commander, limit)
+def suggest(commander: str, limit: int = 40, deck_id: int | None = None):
+    return queries.suggest_cards(commander, limit, deck_id)
 
 
 app.include_router(api)

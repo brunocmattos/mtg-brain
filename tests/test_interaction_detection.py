@@ -244,11 +244,14 @@ def test_draw_false_on_none():
     assert _is_draw(None) is False
 
 
-def test_draw_up_to_two_cards_is_false_known_gap():
-    # COMPORTAMENTO REAL: o regex `draws? \\w+ cards?` so admite UMA palavra entre
-    # "draw" e "cards"; "up to two" tem tres -> nao casa. Possivel sub-contagem
-    # (ver behavior_notes). Travado para nao mascarar regressao.
-    assert _is_draw("Draw up to two cards.") is False
+def test_draw_up_to_two_cards():
+    assert _is_draw("Draw up to two cards.") is True
+
+
+def test_draw_false_when_only_opponent_draws():
+    # Smothering Tithe: o oponente compra, você ganha Treasure — não é compra sua
+    assert _is_draw("Whenever an opponent draws a card, that player may pay {2}. "
+                    "If the player doesn't, you create a Treasure token.") is False
 
 
 # =============================================================== _is_tutor
@@ -262,9 +265,17 @@ def test_tutor_false_search_for_land():
     assert _is_tutor("Search your library for a basic land card.") is False
 
 
-def test_tutor_false_search_for_creature():
-    # So casa a frase exata "search your library for a card".
-    assert _is_tutor("Search your library for a creature card.") is False
+def test_tutor_typed_search():
+    # Worldly Tutor, Enlightened/Mystical Tutor, Buried Alive
+    assert _is_tutor("Search your library for a creature card, reveal it, then shuffle.") is True
+    assert _is_tutor("Search your library for an instant or sorcery card.") is True
+    assert _is_tutor("Search your library for up to three creature cards and put them "
+                     "into your graveyard.") is True
+
+
+def test_tutor_false_search_for_forest():
+    assert _is_tutor("Search your library for a Forest card and put it onto the "
+                     "battlefield.") is False
 
 
 def test_tutor_false_on_none():
@@ -379,3 +390,61 @@ def test_win_combo_false_two_cards_missing_results_key():
     # results ausente -> .get(...) or [] -> sem palavra-chave -> False (sem KeyError).
     combo = {"card_names": ["A", "B"]}
     assert _is_win_combo(combo) is False
+
+
+def test_win_combo_spellbook_win_the_game():
+    # o Commander Spellbook grava o resultado como "Win the game" (sem o "s")
+    combo = {"card_names": ["Laboratory Maniac", "Oath of Druids"], "results": ["Win the game"]}
+    assert _is_win_combo(combo) is True
+
+
+def test_win_combo_each_opponent_lose_the_game():
+    combo = {"card_names": ["A", "B"], "results": ["Each opponent loses the game", "Lose the game"]}
+    assert _is_win_combo(combo) is True
+
+
+# ===================================== regressões da auditoria de 2026-11-07
+REGROWTH = "Return target card from your graveyard to your hand."
+SHATTERSTORM = "Destroy all artifacts. They can't be regenerated."
+TORMODS_CRYPT = "{T}, Sacrifice Tormod's Crypt: Exile all cards from target player's graveyard."
+
+
+def test_interaction_false_on_recursion():
+    assert _is_interaction(REGROWTH) is False
+    assert _is_interaction("Return target creature card from your graveyard to the "
+                           "battlefield.") is False
+
+
+def test_interaction_bounce_still_counts():
+    assert _is_interaction("Return target nonland permanent you don't control to its "
+                           "owner's hand.") is True
+
+
+def test_interaction_burn_and_debuff_removal():
+    assert _is_interaction("Lightning Helix deals 3 damage to any target and you gain "
+                           "3 life.") is True
+    assert _is_interaction("Target creature gets -5/-5 until end of turn.") is True
+
+
+def test_wipe_false_on_artifact_and_graveyard_hate():
+    assert _is_wipe(SHATTERSTORM) is False
+    assert _is_wipe(TORMODS_CRYPT) is False
+    assert _is_interaction(TORMODS_CRYPT) is False
+
+
+def test_wipe_damage_and_tuck():
+    assert _is_wipe("Blasphemous Act deals 13 damage to each creature.") is True
+    assert _is_wipe("Put all creatures on the bottom of their owners' libraries.") is True
+
+
+def test_instant_speed_false_on_flashback():
+    assert _is_instant_speed("Sorcery", "Return target creature card from a graveyard "
+                             "to the battlefield.\nFlashback—Sacrifice three creatures.") is False
+
+
+def test_ramp_basic_type_search_and_extra_mana():
+    assert _is_ramp("sorcery", "Search your library for a Forest card and a Plains card "
+                    "and put them onto the battlefield tapped.") is True
+    assert _is_ramp("enchantment", "Whenever enchanted land is tapped for mana, its "
+                    "controller adds an additional {G}.") is True
+    assert _is_ramp("enchantment", "You may play an additional land on each of your turns.") is True
