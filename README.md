@@ -9,6 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/brunocmattos/mtg-brain/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/brunocmattos/mtg-brain/ci.yml?branch=master&style=for-the-badge&label=CI&labelColor=0b0710" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licen%C3%A7a-MIT-a78bfa?style=for-the-badge&labelColor=0b0710" alt="Licença MIT"></a>
   <img src="https://img.shields.io/badge/custo-US%24_0-d4af37?style=for-the-badge&labelColor=0b0710" alt="Custo US$ 0">
   <img src="https://img.shields.io/badge/formato-Commander_%2F_EDH-7c3aed?style=for-the-badge&labelColor=0b0710" alt="Commander / EDH">
   <br>
@@ -260,3 +261,4 @@ A skill `/deck-creator` mora fora do repo, em `~/.claude/skills/deck-creator/SKI
 - Dados de cartas/preços via **Scryfall**; combos via **Commander Spellbook**; regras © **Wizards of the Coast**. Projeto pessoal, **não** afiliado nem endossado por nenhum deles. As imagens de carta nas screenshots são © Wizards of the Coast, servidas pelo Scryfall.
 - Preços vêm da impressão ingerida e são **aproximados**. Terrenos básicos são tratados como grátis.
 - `data/`, `.env`, `web/dist` e `web/node_modules` ficam fora do git (veja `.gitignore`).
+- Código sob a licença [MIT](LICENSE). A licença cobre o código deste repositório, não os dados de cartas, as imagens nem as regras, que seguem as condições de cada fonte.
